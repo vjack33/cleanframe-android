@@ -82,7 +82,7 @@
   var iconPacks = [{ packageName: 'default', name: 'CleanFrame default' }], iconPackImages = {}, iconPackImagesFor = 'default';
   var mediaState = { access: false, available: false, playing: false, title: '', artist: '', source: '', artwork: '', position: 0, duration: 0, sampledAt: 0 };
   var mediaTimer = 0;
-  var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
+  var QA = window.QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
   var FONTS = {
     manrope: { name: 'Manrope', family: 'Manrope', display: 600, ui: 500, clock: 500 },
     montreal: { name: 'Neue Montreal', family: 'Study Montreal', display: 300, ui: 400, clock: 300 },
@@ -626,7 +626,7 @@
     return { prev: v ? 'up' : 'left', next: v ? 'down' : 'right', out: v ? 'right' : 'up', inn: v ? 'left' : 'down' };
   }
   function utilAction(u) {
-    if (u === 'art') perform('Art Mode', FrameDevice.art);
+    if (u === 'art') openArtMode();
     else if (u === 'apps') openApps();
     else if (u === 'inputs') openInputs();
     else openSettings();
@@ -888,6 +888,96 @@
         if (i === t.i) { t.f.zone = 'photo'; this.key(t, 'ok'); }
         else previewWallpaper(t, i, true);
       }
+    }
+  };
+
+  /* ---------- Art Mode (Frame ambient gallery) ---------- */
+  function openArtMode() {
+    var cur = wallIndex(S.c.wall);
+    push({ id: 'art', i: cur, f: { zone: 'art' }, applied: false });
+    previewArt(top(), cur);
+    pingArtPlaque();
+    restartArtSlideshow(top());
+  }
+  function closeArtMode() {
+    clearTimeout(artHideTimer);
+    clearTimeout(artSlideshowTimer);
+    if (top().id === 'art') pop();
+    restoreLook();
+    render();
+  }
+  function previewArt(t, index) {
+    if (!t) return;
+    t.i = (index + WALLS.length) % WALLS.length;
+    t.applied = false;
+    showWall(WALLS[t.i].id, function (ok) {
+      if (top() !== t) return;
+      render();
+    });
+    pingArtPlaque();
+    restartArtSlideshow(t);
+  }
+  function applyArtWallpaper(t) {
+    if (!t) return;
+    var w = WALLS[t.i];
+    setLook({ wall: w.id }, { row: 'wallpaper' });
+    t.applied = true;
+    pingArtPlaque();
+    render();
+    setTimeout(function () {
+      if (top() === t) {
+        t.applied = false;
+        render();
+      }
+    }, 2500);
+  }
+  function pingArtPlaque() {
+    if (!artPlaque) return;
+    artPlaque.classList.remove('is-hidden');
+    clearTimeout(artHideTimer);
+    artHideTimer = setTimeout(function () {
+      if (top().id === 'art') artPlaque.classList.add('is-hidden');
+    }, 4500);
+  }
+  function restartArtSlideshow(t) {
+    clearTimeout(artSlideshowTimer);
+    artSlideshowTimer = setTimeout(function () {
+      if (top().id === 'art') {
+        previewArt(top(), (top().i + 1) % WALLS.length);
+        render();
+      }
+    }, 45000);
+  }
+  V.art = {
+    norm: function (t) {
+      t.i = clamp(t.i, 0, WALLS.length - 1);
+    },
+    key: function (t, k) {
+      pingArtPlaque();
+      if (k === 'back' || k === 'up' || k === 'down') {
+        closeArtMode();
+        return;
+      }
+      if (k === 'left') {
+        previewArt(t, t.i - 1);
+        return;
+      }
+      if (k === 'right') {
+        previewArt(t, t.i + 1);
+        return;
+      }
+      if (k === 'ok') {
+        applyArtWallpaper(t);
+        return;
+      }
+    },
+    point: function (t, z, i, id, action) {
+      pingArtPlaque();
+      if (action === 'exit') closeArtMode();
+      else if (action === 'prev') previewArt(t, t.i - 1);
+      else if (action === 'next') previewArt(t, t.i + 1);
+      else if (action === 'apply') applyArtWallpaper(t);
+      else closeArtMode();
     }
   };
 
@@ -1201,6 +1291,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var stage = $('stage'), homeEl = $('home'), caption = $('caption'), nowPlayingEl = $('nowPlaying'), utilsEl = $('utils');
   var utilFocusLabel = $('utilFocusLabel'), utilFocusKey = '', appFocusName = $('appFocusName');
+  var artOverlay = $('artOverlay'), artPlaque = $('artPlaque'), artTitle = $('artTitle'), artArtist = $('artArtist'), artChip = $('artChip');
+  var artHideTimer = 0, artSlideshowTimer = 0;
   var dock = $('dock'), shelf = $('shelf'), track = $('track'), plate = $('plate'), matScrim = $('matScrim'), dockEmpty = $('dockEmpty');
   var cueL = $('cueL'), cueR = $('cueR'), dockAction = $('dockAction');
   var focusStatus = $('focusStatus'), sceneEl = $('scene'), appearanceEl = $('appearance'), appearanceRows = $('appearanceRows'), appearanceDesc = $('appearanceDesc');
@@ -1252,6 +1344,7 @@
     if (!sheet) renderHome(t);
     renderSheet(t, sheet);
     renderAppearance(t);
+    renderArtMode(t);
     renderFocusStatus(t);
   }
 
@@ -1760,10 +1853,34 @@
     if (t.f.zone === 'photo' && candidate.id === S.c.wall && !S.pending && !t.failedId) hint = '';
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + hint + '</span>' : '');
   }
+  function renderArtMode(t) {
+    if (!artOverlay) return;
+    if (t.id !== 'art') {
+      artOverlay.hidden = true;
+      if (artPlaque) artPlaque.classList.remove('is-hidden');
+      if (artChip) artChip.classList.remove('is-on');
+      return;
+    }
+    artOverlay.hidden = false;
+    var w = WALLS[t.i];
+    if (w) {
+      if (artTitle) artTitle.textContent = w.name;
+      if (artArtist) artArtist.textContent = (w.author || 'CleanFrame Curated Gallery') + ' \u00b7 ' + (t.i + 1) + ' of ' + WALLS.length;
+    }
+    if (artChip) {
+      if (t.applied) {
+        artChip.textContent = 'Set as wallpaper \u2713';
+        artChip.classList.add('is-on');
+        if (artPlaque) artPlaque.classList.add('is-hidden');
+      } else {
+        artChip.classList.remove('is-on');
+      }
+    }
+  }
   /* Keep the retry or membership state on the focused control. The stage-level line
      shares its position without changing the control's identity or key behaviour. */
   function renderFocusStatus(t) {
-    if (isSettingsDetail(t)) { focusStatus.className = 'focus-status'; return; }
+    if (t.id === 'art' || isSettingsDetail(t)) { focusStatus.className = 'focus-status'; return; }
     var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, text = S.err ? 'Not saved. OK tries again.' : '', i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
     Array.prototype.forEach.call(stage.querySelectorAll('.has-local-status'), function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
     for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
@@ -2152,6 +2269,21 @@
     if (!el || el === stage) return;
     pointAt(el);
   });
+  if (artOverlay) {
+    artOverlay.addEventListener('click', function (ev) {
+      if (top().id !== 'art') return;
+      var rect = artOverlay.getBoundingClientRect();
+      var x = ev.clientX - rect.left;
+      var w = rect.width || window.innerWidth;
+      if (x < w * 0.3) {
+        previewArt(top(), top().i - 1);
+      } else if (x > w * 0.7) {
+        previewArt(top(), top().i + 1);
+      } else {
+        closeArtMode();
+      }
+    });
+  }
   var heldKeys = {};
   document.addEventListener('keydown', function (ev) {
     var code = ev.keyCode, k = KEYS[code];
@@ -2198,9 +2330,17 @@
   QA.ready = function () { return fontsReady && !S.pending && !!S.shown && S.shown.bg === S.c.bg && S.shown.wall === S.c.wall && S.shown.font === S.c.font; };
   QA.nav = function () { var keys = arguments.length === 1 && Array.isArray(arguments[0]) ? arguments[0] : Array.prototype.slice.call(arguments); keys.forEach(function (key) { if (!NAV[key]) throw new Error('Unknown key'); press(NAV[key]); }); return QA.state(); };
   QA.look = function (patch) { setLook(patch, {}); return QA.state(); };
-  QA.scene = function (name) { if (['home', 'apps', 'settings', 'appearance', 'editor'].indexOf(name) < 0) throw new Error('Unknown view'); goScene(name); return QA.state(); };
+  QA.scene = function (name) {
+    if (name === 'art') { openArtMode(); return QA.state(); }
+    if (['home', 'apps', 'settings', 'appearance', 'editor'].indexOf(name) < 0) throw new Error('Unknown view');
+    goScene(name);
+    return QA.state();
+  };
   QA.activate = function (action) { return activate(action) ? QA.state() : null; };
   QA.actions = function () { var view = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl; return Array.prototype.filter.call(view.querySelectorAll('[data-action]'), renderedAction).map(function (el) { return el.getAttribute('data-action'); }); };
+
+  window.openArtMode = openArtMode;
+  window.closeArtMode = closeArtMode;
 
   /* ---------- Start ---------- */
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');

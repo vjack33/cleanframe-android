@@ -57,12 +57,17 @@
   }
 
   function art(done) {
+    if (window.openArtMode) {
+      window.openArtMode();
+      if (done) done(null);
+      return;
+    }
     if (hasAndroid()) {
       try {
         window.AndroidBridge.launchArt();
         if (done) done(null);
       } catch (err) {
-        if (done) done({ message: 'Could not open screensaver/ambient mode.', detail: err && err.message });
+        if (done) done({ message: 'Could not open Art Mode.', detail: err && err.message });
       }
       return;
     }

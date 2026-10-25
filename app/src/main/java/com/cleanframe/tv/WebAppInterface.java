@@ -264,18 +264,11 @@ public class WebAppInterface {
 
     @JavascriptInterface
     public void launchArt() {
-        try {
-            Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.setClassName("com.android.systemui", "com.android.systemui.Somnambulator");
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(intent);
-        } catch (Exception e) {
-            try {
-                Intent intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                activity.startActivity(intent);
-            } catch (Exception ignored) {}
-        }
+        activity.runOnUiThread(() -> {
+            if (activity.getWebView() != null) {
+                activity.getWebView().evaluateJavascript("if (window.openArtMode) window.openArtMode();", null);
+            }
+        });
     }
 
     @JavascriptInterface

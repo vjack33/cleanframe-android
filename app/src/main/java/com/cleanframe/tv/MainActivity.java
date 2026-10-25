@@ -150,6 +150,10 @@ public class MainActivity extends Activity {
         }
     }
 
+    public WebView getWebView() {
+        return webView;
+    }
+
     public void openTvSettings() {
         Intent intent = getPackageManager().getLeanbackLaunchIntentForPackage("com.android.tv.settings");
         if (intent == null) intent = new Intent(Settings.ACTION_SETTINGS);
