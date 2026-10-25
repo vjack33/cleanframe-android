@@ -92,10 +92,10 @@
     newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontsReady = false;
-  var LOOK_KEYS = ['bg', 'layout', 'apps', 'font', 'controls', 'focus', 'material', 'dockSize', 'iconPack'];
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], dockSize: Object.keys(DOCK_SIZE_SCALE), iconPack: ['default'] };
-  var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material', dockSize: 'Dock size', iconPack: 'Icon pack' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', small: 'Small', medium: 'Medium', large: 'Large' };
+  var LOOK_KEYS = ['bg', 'layout', 'apps', 'font', 'controls', 'focus', 'material', 'dockSize', 'iconPack', 'mediaBar'];
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], dockSize: Object.keys(DOCK_SIZE_SCALE), iconPack: ['default'], mediaBar: ['full', 'compact', 'hidden'] };
+  var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material', dockSize: 'Dock size', iconPack: 'Icon pack', mediaBar: 'Music bar' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', small: 'Small', medium: 'Medium', large: 'Large', full: 'Full', compact: 'Compact', hidden: 'Hidden' };
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], inputs: ['Inputs', 'tv'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
     leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
@@ -134,7 +134,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, dockSize: c.dockSize, iconPack: c.iconPack }; }
+  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, dockSize: c.dockSize, iconPack: c.iconPack, mediaBar: c.mediaBar }; }
   function materialApplies(c) { c = c || S.c; return c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
   function derivedTheme() { return S.c.layout === 'list' ? 'list' : 'shore'; }
 
@@ -407,7 +407,9 @@
       apps: pick(modern.apps, LOOK_VALUES.apps, legacyList ? 'text' : 'both'), controls: pick(modern.controls, LOOK_VALUES.controls, 'both'),
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), dockSize: pick(modern.dockSize, LOOK_VALUES.dockSize, 'medium'),
-      iconPack: pick(modern.iconPack, LOOK_VALUES.iconPack, 'default'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
+      iconPack: pick(modern.iconPack, LOOK_VALUES.iconPack, 'default'),
+      mediaBar: pick(modern.mediaBar, LOOK_VALUES.mediaBar, 'full'),
+      wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
     };
@@ -629,10 +631,42 @@
     else if (u === 'inputs') openInputs();
     else openSettings();
   }
-  function hasMediaPanel() { return !mediaState.access || mediaState.available; }
-  function mediaAction(index) {
-    if (!mediaState.access) { FrameDevice.requestNowPlayingAccess(); return; }
-    FrameDevice.controlMedia(['previous', 'toggle', 'next'][clamp(index, 0, 2)], function (err) {
+  function hasMediaPanel() {
+    if (S.c.mediaBar === 'hidden') return false;
+    return !mediaState.access || mediaState.available;
+  }
+  function mediaAction(actionOrIndex, isCompact) {
+    var isComp = isCompact !== undefined ? isCompact : S.c.mediaBar === 'compact';
+    var action = actionOrIndex;
+    if (typeof actionOrIndex === 'number') {
+      if (isComp) {
+        action = actionOrIndex === 1 ? 'expand' : (!mediaState.access ? 'setup' : 'toggle');
+      } else {
+        if (!mediaState.access) {
+          action = actionOrIndex === 1 ? 'minimize' : 'setup';
+        } else {
+          action = ['previous', 'toggle', 'next', 'minimize'][clamp(actionOrIndex, 0, 3)];
+        }
+      }
+    }
+    if (action === 'minimize') {
+      setLook({ mediaBar: 'compact' }, { row: 'mediaBar' });
+      var t = top();
+      if (t && t.f && t.f.zone === 'media') t.f.media = 1;
+      return;
+    }
+    if (action === 'expand') {
+      setLook({ mediaBar: 'full' }, { row: 'mediaBar' });
+      var t = top();
+      if (t && t.f && t.f.zone === 'media') t.f.media = !mediaState.access ? 0 : 1;
+      return;
+    }
+    if (action === 'setup' || !mediaState.access) {
+      FrameDevice.requestNowPlayingAccess();
+      return;
+    }
+    if (action !== 'previous' && action !== 'toggle' && action !== 'next') action = 'toggle';
+    FrameDevice.controlMedia(action, function (err) {
       if (err) S.note = err.message;
       else S.note = null;
       refreshNowPlaying();
@@ -684,12 +718,14 @@
       var f = t.f, h = S.c.home, U = utils(), x = axes(), i = ensureSel();
       if (S.c.layout === 'list') { listHomeKey(t, k, i, U); return; }
       if (f.zone === 'media') {
-        f.media = clamp(f.media || 0, 0, mediaState.access ? 2 : 0);
+        var isCompact = S.c.mediaBar === 'compact';
+        var maxMedia = isCompact ? 1 : (mediaState.access ? 3 : 1);
+        f.media = clamp(f.media || 0, 0, maxMedia);
         if (k === 'left' && f.media > 0) f.media--;
-        else if (k === 'right' && f.media < (mediaState.access ? 2 : 0)) f.media++;
+        else if (k === 'right' && f.media < maxMedia) f.media++;
         else if (k === 'up') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
         else if (k === 'down' || k === 'back') f.zone = 'apps';
-        else if (k === 'ok') mediaAction(f.media);
+        else if (k === 'ok') mediaAction(f.media, isCompact);
         return;
       }
       if (f.zone === 'util') {
@@ -709,9 +745,14 @@
       else if (k === x.next && i < h.length - 1) setSel(h[i + 1]);
       else if (k === 'ok') launch(S.sel);
     },
-    point: function (t, z, i) {
+    point: function (t, z, i, id, action) {
       if (z === 'util') { t.f.zone = 'util'; t.f.u = i; S.lastUtil = i; }
-      else if (z === 'media') { t.f.zone = 'media'; t.f.media = i; mediaAction(i); return; }
+      else if (z === 'media') {
+        t.f.zone = 'media';
+        t.f.media = i;
+        mediaAction(action ? action.replace('media.', '') : i, S.c.mediaBar === 'compact');
+        return;
+      }
       else if (z === 'media-setup') { t.f.zone = 'media'; mediaAction(0); return; }
       else if (z === 'app') { t.f.zone = 'apps'; setSel(S.c.home[i]); }
       else if (z === 'empty') t.f.zone = 'apps';
@@ -722,12 +763,14 @@
   function listHomeKey(t, k, i, U) {
     var f = t.f, h = S.c.home;
     if (f.zone === 'media') {
-      f.media = clamp(f.media || 0, 0, mediaState.access ? 2 : 0);
-      if (k === 'left' && f.media > 0) f.media--;
-      else if (k === 'right' && f.media < (mediaState.access ? 2 : 0)) f.media++;
+      var isCompact = S.c.mediaBar === 'compact';
+      var maxMedia = isCompact ? 1 : (mediaState.access ? 3 : 1);
+      f.media = clamp(f.media || 0, 0, maxMedia);
+      if (k === 'left') { if (f.media > 0) f.media--; else f.zone = 'apps'; }
+      else if (k === 'right' && f.media < maxMedia) f.media++;
       else if (k === 'up') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
       else if (k === 'down' || k === 'back') f.zone = 'apps';
-      else if (k === 'ok') mediaAction(f.media);
+      else if (k === 'ok') mediaAction(f.media, isCompact);
       return;
     }
     if (f.zone === 'util') {
@@ -1029,7 +1072,8 @@
       { id: 'layout', title: 'Layout', horizontal: true, items: options('layout', ['list', 'dock']) },
       { id: 'apps', title: 'App display', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
       { id: 'controls', title: 'Home controls', horizontal: true, items: options('controls', ['text', 'icons', 'both']) },
-      { id: 'dockSize', title: 'Dock size', horizontal: true, items: options('dockSize', ['small', 'medium', 'large']) }
+      { id: 'dockSize', title: 'Dock size', horizontal: true, items: options('dockSize', ['small', 'medium', 'large']) },
+      { id: 'mediaBar', title: 'Music bar', horizontal: true, items: options('mediaBar', ['full', 'compact', 'hidden']) }
     ];
     if (t.group === 'typography') return [{ id: 'font', title: '', items: options('font', LOOK_VALUES.font) }];
     if (t.group === 'icons') return [{ id: 'iconPack', title: 'Available icon packs', items: iconPacks.map(function (pack) {
@@ -1241,33 +1285,74 @@
     var total = Math.max(0, Math.floor(ms / 1000));
     return Math.floor(total / 60) + ':' + ('0' + (total % 60)).slice(-2);
   }
-  function mediaButton(index, label, glyph, focused, extra) {
-    var action = ['previous', 'toggle', 'next'][index];
+  function mediaButton(index, label, glyph, focused, extra, actionOverride) {
+    var defaultActions = ['previous', 'toggle', 'next', 'minimize'];
+    var action = actionOverride || defaultActions[index];
     return '<button type="button" class="np-control' + (extra ? ' ' + extra : '') + (focused ? ' is-focus' : '')
       + '" data-z="media" data-i="' + index + '" data-action="media.' + action + '" aria-label="' + esc(label) + '">' + glyph + '</button>';
   }
   function renderNowPlaying(hs) {
-    var visible = !mediaState.access || mediaState.available, focus = top().id === 'home' && hs.zone === 'media' ? hs.media : -1;
+    var visible = S.c.mediaBar !== 'hidden' && (!mediaState.access || mediaState.available);
+    var focus = top().id === 'home' && hs.zone === 'media' ? hs.media : -1;
+    var isCompact = S.c.mediaBar === 'compact';
     nowPlayingEl.hidden = !visible;
     if (!visible) { setHTML(nowPlayingEl, ''); return; }
+    nowPlayingEl.className = 'now-playing' + (isCompact ? ' is-compact' : '');
     if (!mediaState.access) {
-      setHTML(nowPlayingEl, '<div class="np-setup-copy"><span class="np-eyebrow">NOW PLAYING</span><span class="np-title">Enable media controls</span><span class="np-artist">Allow CleanFrame to read active media sessions on this TV.</span></div>'
-        + '<button type="button" class="np-enable' + (focus === 0 ? ' is-focus' : '') + '" data-z="media-setup" data-i="0" data-action="media.setup">Enable</button>');
+      if (isCompact) {
+        setHTML(nowPlayingEl, '<div class="np-pill-body" data-z="media" data-i="1" data-action="media.expand" role="button" aria-label="Enable media controls, click to expand">'
+          + '<div class="np-compact-art np-compact-art-fallback"><span>&#9835;</span></div>'
+          + '<div class="np-compact-info"><span class="np-compact-title">Enable media controls</span></div>'
+          + '</div>'
+          + '<div class="np-controls np-compact-controls">'
+          + '<button type="button" class="np-control np-enable np-compact-enable' + (focus === 0 ? ' is-focus' : '') + '" data-z="media" data-i="0" data-action="media.setup" aria-label="Enable">Enable</button>'
+          + '<button type="button" class="np-control np-compact-expand' + (focus === 1 ? ' is-focus' : '') + '" data-z="media" data-i="1" data-action="media.expand" aria-label="Expand music bar">' + icon('up') + '</button>'
+          + '</div>');
+      } else {
+        setHTML(nowPlayingEl, '<div class="np-setup-copy"><span class="np-eyebrow">NOW PLAYING</span><span class="np-title">Enable media controls</span><span class="np-artist">Allow CleanFrame to read active media sessions on this TV.</span></div>'
+          + '<div class="np-controls">'
+          + '<button type="button" class="np-enable' + (focus === 0 ? ' is-focus' : '') + '" data-z="media" data-i="0" data-action="media.setup">Enable</button>'
+          + '<button type="button" class="np-control np-minimize' + (focus === 1 ? ' is-focus' : '') + '" data-z="media" data-i="1" data-action="media.minimize" aria-label="Minimize music bar">' + icon('down') + '</button>'
+          + '</div>');
+      }
       return;
     }
     var position = mediaState.position + (mediaState.playing ? Math.max(0, Date.now() - mediaState.sampledAt) : 0);
     var duration = mediaState.duration, progress = duration > 0 ? clamp(position / duration * 100, 0, 100) : 0;
+    var playLabel = mediaState.playing ? 'Pause' : 'Play';
+    var playGlyph = mediaState.playing ? '&#10074;&#10074;' : '&#9654;';
+
+    if (isCompact) {
+      var compactArt = mediaState.artwork
+        ? '<img class="np-compact-art" src="' + esc(mediaState.artwork) + '" alt="">'
+        : '<div class="np-compact-art np-compact-art-fallback"><span>&#9835;</span></div>';
+      var trackLabel = (mediaState.title || 'Unknown track') + (mediaState.artist ? ' · ' + mediaState.artist : '');
+      setHTML(nowPlayingEl, '<div class="np-pill-body" data-z="media" data-i="1" data-action="media.expand" role="button" aria-label="' + esc(trackLabel) + ', Click to expand">'
+        + compactArt
+        + '<div class="np-compact-info">'
+        + '<span class="np-compact-title">' + esc(mediaState.title || 'Unknown track') + '</span>'
+        + (mediaState.artist ? '<span class="np-compact-sep">&#183;</span><span class="np-compact-artist">' + esc(mediaState.artist) + '</span>' : '')
+        + '</div>'
+        + '</div>'
+        + '<div class="np-controls np-compact-controls">'
+        + '<button type="button" class="np-control np-play np-compact-play' + (focus === 0 ? ' is-focus' : '') + '" data-z="media" data-i="0" data-action="media.toggle" aria-label="' + esc(playLabel) + '">' + playGlyph + '</button>'
+        + '<button type="button" class="np-control np-compact-expand' + (focus === 1 ? ' is-focus' : '') + '" data-z="media" data-i="1" data-action="media.expand" aria-label="Expand music bar">' + icon('up') + '</button>'
+        + '</div>');
+      return;
+    }
+
     var art = mediaState.artwork
       ? '<img class="np-art" src="' + esc(mediaState.artwork) + '" alt="">'
       : '<div class="np-art np-art-fallback"><span>&#9835;</span></div>';
-    var playLabel = mediaState.playing ? 'Pause' : 'Play';
-    var playGlyph = mediaState.playing ? '&#10074;&#10074;' : '&#9654;';
     var timeline = duration > 0 ? '<div class="np-timeline"><span>' + mediaTime(position) + '</span><div class="np-rail"><span style="width:' + progress.toFixed(1) + '%"></span></div><span>' + mediaTime(duration) + '</span></div>' : '';
     setHTML(nowPlayingEl, art + '<div class="np-info"><span class="np-eyebrow">NOW PLAYING <span class="np-dot">&#183;</span> ' + esc(mediaState.source || 'MEDIA') + '</span>'
       + '<span class="np-title">' + esc(mediaState.title || 'Unknown track') + '</span><span class="np-artist">' + esc(mediaState.artist || mediaState.album || '') + '</span>' + timeline + '</div>'
-      + '<div class="np-controls">' + mediaButton(0, 'Previous track', '&#9198;', focus === 0, '')
+      + '<div class="np-controls">'
+      + mediaButton(0, 'Previous track', '&#9198;', focus === 0, '')
       + mediaButton(1, playLabel, playGlyph, focus === 1, 'np-play')
-      + mediaButton(2, 'Next track', '&#9197;', focus === 2, '') + '</div>');
+      + mediaButton(2, 'Next track', '&#9197;', focus === 2, '')
+      + mediaButton(3, 'Minimize music bar', icon('down'), focus === 3, 'np-minimize')
+      + '</div>');
   }
 
   function clockText() {
@@ -1422,7 +1507,7 @@
     var items = hs.items, n = items.length, empty = hs.mode !== 'arrange' && !n, g = dockGeom(empty ? -1 : n);
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), off = empty ? 0 : dockOffset(n, anchor, g);
     var full = hs.arr ? live(hs.arr.slots).length >= CAP : false, ns = hs.arr ? hs.arr.slots.length : n;
-    var tileFocus = hs.zone === 'apps' || hs.zone === 'tiles', tileSel = hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
+    var tileFocus = hs.zone === 'apps' || hs.zone === 'tiles', tileSel = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview';
     var focusItem = items[anchor], s, ax, label, width;
 
     dock.className = 'dock' + (empty ? ' is-empty' : '');
@@ -1526,7 +1611,7 @@
   function renderList(hs) {
     var items = hs.items, n = items.length, compact = hs.mode === 'arrange', pitch = compact ? PH_COMPACT_PITCH : PH_PITCH;
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), first, off, width, slot, y, s, label, aw, plateState;
-    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = hs.zone === 'util' || hs.zone === 'act' || hs.zone === 'ctl' || hs.zone === 'preview';
+    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview';
     photoModeTransition(compact);
     if (compact) {
       first = clamp(scroll.photoArrange, anchor - 7, anchor - 1);
@@ -1892,6 +1977,9 @@
     function finish(bundle) {
       var c = next(S.c.home.slice(), S.c.recent.slice()), fontChanged = target.font !== S.c.font, reflow = target.apps !== S.c.apps || target.controls !== S.c.controls || fontChanged, frame, fontFrame;
       Object.keys(target).forEach(function (key) { c[key] = target[key]; });
+      if (c.mediaBar === 'hidden' && top().id === 'home' && top().f.zone === 'media') {
+        top().f.zone = 'apps';
+      }
       S.pending = null; S.wallPending = null;
       if (!opts.transient && changed && !write(c, 'Appearance')) { S.lookError = { type: 'save', patch: changes, row: opts.row || S.appearanceFocus, transient: false }; render(); syncRotation(); return; }
       if (opts.transient) S.c = c;
@@ -2039,7 +2127,7 @@
   function pointAt(el) {
     var t = top(), v = V[t.id];
     norm();
-    if (v.point) v.point(t, el.getAttribute('data-z'), +el.getAttribute('data-i'), el.getAttribute('data-id'));
+    if (v.point) v.point(t, el.getAttribute('data-z'), +el.getAttribute('data-i'), el.getAttribute('data-id'), el.getAttribute('data-action'));
     norm();
     render();
     syncRotation();
