@@ -153,6 +153,26 @@
     }
   }
 
+  function iconPacks(done) {
+    if (!hasAndroid()) { done(null, []); return; }
+    try {
+      var packs = JSON.parse(window.AndroidBridge.getIconPacks());
+      if (done) done(null, Array.isArray(packs) ? packs : []);
+    } catch (err) {
+      if (done) done({ message: 'Could not read installed icon packs.', detail: err && err.message });
+    }
+  }
+
+  function iconPackIcons(packageName, appIds, done) {
+    if (!hasAndroid()) { done(null, {}); return; }
+    try {
+      var images = JSON.parse(window.AndroidBridge.getIconPackIcons(packageName, JSON.stringify(appIds)));
+      if (done) done(null, images && typeof images === 'object' ? images : {});
+    } catch (err) {
+      if (done) done({ message: 'Could not load icons from this pack.', detail: err && err.message });
+    }
+  }
+
   function apps(done) {
     if (hasAndroid()) {
       try {
@@ -184,6 +204,8 @@
     nowPlaying: nowPlaying,
     controlMedia: controlMedia,
     requestNowPlayingAccess: requestNowPlayingAccess,
+    iconPacks: iconPacks,
+    iconPackIcons: iconPackIcons,
     apps: apps
   };
 })();

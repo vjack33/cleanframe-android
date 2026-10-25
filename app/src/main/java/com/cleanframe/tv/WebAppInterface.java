@@ -4,15 +4,25 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Resources;
+import android.content.res.XmlResourceParser;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Base64;
+import android.util.Xml;
 import android.webkit.JavascriptInterface;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -330,5 +340,110 @@ public class WebAppInterface {
             e.printStackTrace();
         }
         return array.toString();
+    }
+
+    @JavascriptInterface
+    public String getIconPacks() {
+        JSONArray array = new JSONArray();
+        String[] actions = {
+            "org.adw.launcher.THEMES", "com.anddoes.launcher.THEME", "com.novalauncher.THEME",
+            "com.teslacoilsw.launcher.THEMES", "com.gau.go.launcherex.theme", "com.dlto.atom.launcher.THEME"
+        };
+        PackageManager pm = activity.getPackageManager();
+        Set<String> seen = new HashSet<>();
+        try {
+            for (String action : actions) {
+                Intent intent = new Intent(action);
+                List<ResolveInfo> matches = pm.queryIntentActivities(intent, 0);
+                if (matches == null) continue;
+                for (ResolveInfo info : matches) {
+                    if (info.activityInfo == null) continue;
+                    String packageName = info.activityInfo.packageName;
+                    if (!seen.add(packageName) || !hasAppFilter(packageName)) continue;
+                    JSONObject item = new JSONObject();
+                    item.put("packageName", packageName);
+                    item.put("name", info.loadLabel(pm).toString());
+                    array.put(item);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("CLEANFRAME_TV", "Could not enumerate icon packs", e);
+        }
+        return array.toString();
+    }
+
+    @JavascriptInterface
+    public String getIconPackIcons(String packPackage, String requestedIdsJson) {
+        JSONObject result = new JSONObject();
+        if (packPackage == null || packPackage.isEmpty()) return result.toString();
+        try {
+            JSONArray requested = new JSONArray(requestedIdsJson);
+            Set<String> packageNames = new HashSet<>();
+            for (int index = 0; index < requested.length(); index++) packageNames.add(requested.getString(index));
+            Resources packResources = activity.getPackageManager().getResourcesForApplication(packPackage);
+            Map<String, String> mappings = readAppFilter(packResources, packPackage, packageNames);
+            for (Map.Entry<String, String> mapping : mappings.entrySet()) {
+                int drawableId = packResources.getIdentifier(mapping.getValue(), "drawable", packPackage);
+                if (drawableId == 0) drawableId = packResources.getIdentifier(mapping.getValue(), "mipmap", packPackage);
+                if (drawableId == 0) continue;
+                Drawable drawable = packResources.getDrawable(drawableId, null);
+                Bitmap bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bitmap);
+                drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+                drawable.draw(canvas);
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+                result.put(mapping.getKey(), "data:image/png;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+                bitmap.recycle();
+            }
+        } catch (Exception e) {
+            android.util.Log.w("CLEANFRAME_TV", "Could not load icons from " + packPackage, e);
+        }
+        return result.toString();
+    }
+
+    private boolean hasAppFilter(String packageName) {
+        try {
+            Resources resources = activity.getPackageManager().getResourcesForApplication(packageName);
+            int filterId = resources.getIdentifier("appfilter", "xml", packageName);
+            if (filterId != 0) return true;
+            try (InputStream ignored = resources.getAssets().open("appfilter.xml")) {
+                return true;
+            }
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private Map<String, String> readAppFilter(Resources resources, String packPackage, Set<String> requestedPackages) throws Exception {
+        Map<String, String> mappings = new HashMap<>();
+        int filterId = resources.getIdentifier("appfilter", "xml", packPackage);
+        XmlResourceParser resourceParser = null;
+        InputStream assetStream = null;
+        XmlPullParser parser;
+        if (filterId != 0) {
+            resourceParser = resources.getXml(filterId);
+            parser = resourceParser;
+        } else {
+            assetStream = resources.getAssets().open("appfilter.xml");
+            parser = Xml.newPullParser();
+            parser.setInput(assetStream, "UTF-8");
+        }
+        try {
+            while (parser.next() != XmlPullParser.END_DOCUMENT) {
+                if (parser.getEventType() != XmlPullParser.START_TAG || !"item".equals(parser.getName())) continue;
+                String component = parser.getAttributeValue(null, "component");
+                String drawableName = parser.getAttributeValue(null, "drawable");
+                if (component == null || drawableName == null) continue;
+                int open = component.indexOf('{'), slash = component.indexOf('/', open + 1);
+                if (open < 0 || slash < 0) continue;
+                String appPackage = component.substring(open + 1, slash);
+                if (requestedPackages.contains(appPackage) && !mappings.containsKey(appPackage)) mappings.put(appPackage, drawableName);
+            }
+        } finally {
+            if (resourceParser != null) resourceParser.close();
+            if (assetStream != null) assetStream.close();
+        }
+        return mappings;
     }
 }
