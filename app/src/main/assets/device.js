@@ -198,6 +198,34 @@
     ]);
   }
 
+  function bingWallpapers(done) {
+    if (hasAndroid()) {
+      try {
+        var raw = window.AndroidBridge.getBingWallpapers();
+        var list = JSON.parse(raw);
+        if (done) done(null, Array.isArray(list) ? list : []);
+      } catch (err) {
+        if (done) done({ message: 'Could not fetch Bing wallpapers.', detail: err && err.message });
+      }
+      return;
+    }
+    if (done) done(null, []);
+  }
+
+  function localWallpapers(done) {
+    if (hasAndroid()) {
+      try {
+        var raw = window.AndroidBridge.getLocalWallpapers();
+        var list = JSON.parse(raw);
+        if (done) done(null, Array.isArray(list) ? list : []);
+      } catch (err) {
+        if (done) done({ message: 'Could not scan local wallpapers.', detail: err && err.message });
+      }
+      return;
+    }
+    if (done) done(null, []);
+  }
+
   window.FrameDevice = {
     launch: launch,
     launchApp: launchApp,
@@ -211,6 +239,8 @@
     requestNowPlayingAccess: requestNowPlayingAccess,
     iconPacks: iconPacks,
     iconPackIcons: iconPackIcons,
-    apps: apps
+    apps: apps,
+    bingWallpapers: bingWallpapers,
+    localWallpapers: localWallpapers
   };
 })();

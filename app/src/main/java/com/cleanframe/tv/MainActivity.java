@@ -30,6 +30,13 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideSystemUI();
 
+        if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                "android.permission.READ_MEDIA_IMAGES"
+            }, 101);
+        }
+
         webView = new WebView(this);
         setContentView(webView);
 

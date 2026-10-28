@@ -84,8 +84,20 @@ public class WebAppInterface {
         }
     }
 
+    private static volatile String cachedBingJson = null;
+    private static volatile String cachedLocalJson = null;
+
     public WebAppInterface(MainActivity activity) {
         this.activity = activity;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    getBingWallpapers();
+                    getLocalWallpapers();
+                } catch (Exception ignored) {}
+            }
+        }).start();
     }
 
     @JavascriptInterface
@@ -515,5 +527,143 @@ public class WebAppInterface {
             if (assetStream != null) assetStream.close();
         }
         return mappings;
+    }
+
+    @JavascriptInterface
+    public String getBingWallpapers() {
+        if (cachedBingJson != null) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() { fetchBingWallpapersDirect(); }
+            }).start();
+            return cachedBingJson;
+        }
+        return fetchBingWallpapersDirect();
+    }
+
+    private String fetchBingWallpapersDirect() {
+        JSONArray array = new JSONArray();
+        try {
+            java.net.URL url = new java.net.URL("https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=en-US");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            if (conn.getResponseCode() == 200) {
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+                JSONObject json = new JSONObject(sb.toString());
+                JSONArray images = json.optJSONArray("images");
+                if (images != null) {
+                    for (int i = 0; i < images.length(); i++) {
+                        JSONObject img = images.getJSONObject(i);
+                        String urlBase = img.optString("urlbase", "");
+                        String rawUrl = img.optString("url", "");
+                        String fullUrl = !urlBase.isEmpty() ? "https://www.bing.com" + urlBase + "_1920x1080.jpg" : "https://www.bing.com" + rawUrl;
+                        String thumbUrl = !urlBase.isEmpty() ? "https://www.bing.com" + urlBase + "_640x360.jpg" : fullUrl;
+                        String title = img.optString("title", "");
+                        String copyright = img.optString("copyright", "");
+                        String date = img.optString("startdate", "");
+                        String id = "bing_" + (date.isEmpty() ? String.valueOf(i) : date);
+
+                        JSONObject item = new JSONObject();
+                        item.put("id", id);
+                        item.put("name", !title.isEmpty() ? title : (!copyright.isEmpty() ? copyright.split("\\(")[0].trim() : "Bing Daily " + (i + 1)));
+                        item.put("title", title);
+                        item.put("credit", copyright);
+                        item.put("date", date);
+                        item.put("src", fullUrl);
+                        item.put("thumb", thumbUrl);
+                        item.put("source", "bing");
+                        item.put("isExternal", true);
+                        array.put(item);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("CLEANFRAME_TV", "Could not fetch Bing wallpapers", e);
+        }
+        String res = array.toString();
+        if (array.length() > 0) cachedBingJson = res;
+        return res;
+    }
+
+    @JavascriptInterface
+    public String getLocalWallpapers() {
+        if (cachedLocalJson != null) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() { scanLocalWallpapersDirect(); }
+            }).start();
+            return cachedLocalJson;
+        }
+        return scanLocalWallpapersDirect();
+    }
+
+    private String scanLocalWallpapersDirect() {
+        JSONArray array = new JSONArray();
+        try {
+            Set<String> searchDirs = new java.util.LinkedHashSet<>();
+            searchDirs.add("/sdcard/Pictures");
+            searchDirs.add("/sdcard/Pictures/Wallpapers");
+            searchDirs.add("/sdcard/Download");
+            searchDirs.add("/sdcard/DCIM");
+            searchDirs.add("/sdcard/DCIM/Camera");
+
+            // Look for mounted USB storage under /storage
+            java.io.File storageDir = new java.io.File("/storage");
+            if (storageDir.exists() && storageDir.isDirectory()) {
+                java.io.File[] storageFiles = storageDir.listFiles();
+                if (storageFiles != null) {
+                    for (java.io.File f : storageFiles) {
+                        String name = f.getName();
+                        if (!"emulated".equals(name) && !"self".equals(name) && f.canRead()) {
+                            searchDirs.add(f.getAbsolutePath());
+                            searchDirs.add(f.getAbsolutePath() + "/Pictures");
+                            searchDirs.add(f.getAbsolutePath() + "/Wallpapers");
+                            searchDirs.add(f.getAbsolutePath() + "/DCIM");
+                            searchDirs.add(f.getAbsolutePath() + "/Download");
+                        }
+                    }
+                }
+            }
+
+            Set<String> visited = new HashSet<>();
+            for (String dirPath : searchDirs) {
+                java.io.File dir = new java.io.File(dirPath);
+                if (!dir.exists() || !dir.isDirectory() || !dir.canRead()) continue;
+                java.io.File[] files = dir.listFiles();
+                if (files == null) continue;
+                for (java.io.File file : files) {
+                    if (file.isFile() && file.canRead()) {
+                        String fname = file.getName().toLowerCase();
+                        if (fname.endsWith(".jpg") || fname.endsWith(".jpeg") || fname.endsWith(".png") || fname.endsWith(".webp")) {
+                            String absPath = file.getAbsolutePath();
+                            if (visited.add(absPath)) {
+                                JSONObject item = new JSONObject();
+                                item.put("id", "local_" + Math.abs(absPath.hashCode()));
+                                item.put("name", file.getName());
+                                item.put("credit", file.getParent());
+                                item.put("src", "file://" + absPath);
+                                item.put("thumb", "file://" + absPath);
+                                item.put("path", absPath);
+                                item.put("size", file.length());
+                                item.put("source", "local");
+                                item.put("isExternal", true);
+                                array.put(item);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("CLEANFRAME_TV", "Could not scan local wallpapers", e);
+        }
+        String res = array.toString();
+        if (array.length() > 0) cachedLocalJson = res;
+        return res;
     }
 }

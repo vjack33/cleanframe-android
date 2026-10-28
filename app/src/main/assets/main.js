@@ -92,10 +92,10 @@
     newsreader: { name: 'Newsreader', family: 'Study Newsreader', display: 400, ui: 400, clock: 400 }
   };
   var PRIVATE_FONTS = window.CleanFramePrivateFontIDs || [], fontMetrics = {}, unavailableFonts = {}, widthCache = {}, fontsReady = false;
-  var LOOK_KEYS = ['bg', 'layout', 'apps', 'font', 'controls', 'focus', 'material', 'dockSize', 'iconPack', 'mediaBar'];
-  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], dockSize: Object.keys(DOCK_SIZE_SCALE), iconPack: ['default'], mediaBar: ['full', 'compact', 'hidden'] };
-  var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material', dockSize: 'Dock size', iconPack: 'Icon pack', mediaBar: 'Music bar' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', small: 'Small', medium: 'Medium', large: 'Large', full: 'Full', compact: 'Compact', hidden: 'Hidden' };
+  var LOOK_KEYS = ['bg', 'wallSource', 'layout', 'apps', 'font', 'controls', 'focus', 'material', 'dockSize', 'iconPack', 'mediaBar'];
+  var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], wallSource: ['gallery', 'bing', 'unsplash', 'nasa', 'local'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'], dockSize: Object.keys(DOCK_SIZE_SCALE), iconPack: ['default'], mediaBar: ['full', 'compact', 'hidden'] };
+  var LOOK_NAMES = { bg: 'Background', wallSource: 'Wallpaper source', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material', dockSize: 'Dock size', iconPack: 'Icon pack', mediaBar: 'Music bar' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', gallery: 'Curated gallery', bing: 'Bing Daily', unsplash: 'Unsplash', nasa: 'NASA Astronomy', local: 'Local & USB', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', small: 'Small', medium: 'Medium', large: 'Large', full: 'Full', compact: 'Compact', hidden: 'Hidden' };
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], inputs: ['Inputs', 'tv'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
     leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
@@ -118,6 +118,87 @@
     warn: '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4.5M12 17.3v.1"/>'
   };
 
+  /* ---------- Wallpaper Sources & Feeds ---------- */
+  var CURATED_UNSPLASH = [
+    { id: 'unsplash_alpine', name: 'Misty Alpine Peaks', credit: 'Luca Bravo · Unsplash', src: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=360&h=200&q=75', tone: 'light' },
+    { id: 'unsplash_redwood', name: 'Deep Redwood Fog', credit: 'Thomas Kelley · Unsplash', src: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'unsplash_dunes', name: 'Dune Light & Shadows', credit: 'Jeremy Bishop · Unsplash', src: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'unsplash_coast', name: 'Nordic Coastal Twilight', credit: 'Damian Markutt · Unsplash', src: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=360&h=200&q=75', tone: 'light' },
+    { id: 'unsplash_arch', name: 'Minimal Architecture', credit: 'Simone Hutsch · Unsplash', src: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=360&h=200&q=75', tone: 'light' },
+    { id: 'unsplash_aurora', name: 'Arctic Aurora Borealis', credit: 'Jonatan Pie · Unsplash', src: 'https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'unsplash_kyoto', name: 'Kyoto Zen Garden', credit: 'Sora Sagano · Unsplash', src: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=360&h=200&q=75', tone: 'light' },
+    { id: 'unsplash_valley', name: 'Misty Alpine Valley', credit: 'Kalina Georgieva · Unsplash', src: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' }
+  ];
+
+  var CURATED_NASA = [
+    { id: 'nasa_earth_orbit', name: 'Blue Marble Orbit', credit: 'NASA · International Space Station', src: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_deep_space', name: 'Cosmic Starfield', credit: 'NASA · Goddard Space Flight Center', src: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_aurora_orbit', name: 'Aurora from Orbit', credit: 'NASA · Expedition 44 Flight Crew', src: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_milky_way', name: 'Milky Way Core', credit: 'NASA · JPL-Caltech', src: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_deep_nebula', name: 'Deep Space Nebula', credit: 'NASA & ESA Hubble Heritage Team', src: 'https://images.unsplash.com/photo-1447433589675-4aaa569f3e05?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1447433589675-4aaa569f3e05?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_stardust', name: 'Interstellar Stardust', credit: 'NASA · Hubble Space Telescope', src: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_andromeda', name: 'Andromeda Spiral Galaxy', credit: 'NASA / ESA Hubble Team', src: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' },
+    { id: 'nasa_moonrise', name: 'Earth Limb & Moonrise', credit: 'NASA · International Space Station', src: 'https://images.unsplash.com/photo-1446776877081-d282a0f896e2?auto=format&fit=crop&w=1920&q=80', thumb: 'https://images.unsplash.com/photo-1446776877081-d282a0f896e2?auto=format&fit=crop&w=360&h=200&q=75', tone: 'dark' }
+  ];
+
+  var dynamicWallpapers = {};
+  var bingList = [];
+  var localList = [];
+  var unsplashList = CURATED_UNSPLASH.slice();
+  var nasaList = CURATED_NASA.slice();
+
+  function registerDynamicWallpapers(items) {
+    if (!items || !items.length) return;
+    items.forEach(function (w) {
+      if (w && w.id) {
+        w.isExternal = true;
+        w.ut = w.ut || { tr: 'mist', br: 'mist' };
+        w.frostVeil = w.frostVeil || 0.16;
+        dynamicWallpapers[w.id] = w;
+      }
+    });
+  }
+  registerDynamicWallpapers(unsplashList);
+  registerDynamicWallpapers(nasaList);
+
+  function activeWallListForSource(src) {
+    src = src || (S.c && S.c.wallSource) || 'gallery';
+    if (src === 'bing' && bingList.length) return bingList;
+    if (src === 'unsplash' && unsplashList.length) return unsplashList;
+    if (src === 'nasa' && nasaList.length) return nasaList;
+    if (src === 'local') {
+      if (localList.length) return localList;
+      return [{
+        id: 'local_none',
+        name: 'No local photos found',
+        credit: 'Connect a USB drive or copy photos to /sdcard/Pictures',
+        src: 'assets/wallpapers/misty.jpg',
+        thumb: 'assets/wallpapers/misty-thumb.jpg',
+        isExternal: true
+      }];
+    }
+    return WALLS;
+  }
+  function activeWallList() {
+    return activeWallListForSource(S.c ? S.c.wallSource : 'gallery');
+  }
+  function refreshWallSources() {
+    FrameDevice.bingWallpapers(function (err, items) {
+      if (!err && items && items.length) {
+        bingList = items;
+        registerDynamicWallpapers(items);
+        if (top().id === 'wallpaper' && S.c && S.c.wallSource === 'bing') render();
+      }
+    });
+    FrameDevice.localWallpapers(function (err, items) {
+      if (!err && items && items.length) {
+        localList = items;
+        registerDynamicWallpapers(items);
+        if (top().id === 'wallpaper' && S.c && S.c.wallSource === 'local') render();
+      }
+    });
+  }
+
   /* ---------- State ---------- */
   var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var S = {
@@ -134,7 +215,7 @@
     for (var i = 0; i < list.length; i++) if (list[i].toLowerCase() === v) return list[i];
     return fallback;
   }
-  function lookOf(c) { return { bg: c.bg, wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, dockSize: c.dockSize, iconPack: c.iconPack, mediaBar: c.mediaBar }; }
+  function lookOf(c) { return { bg: c.bg, wallSource: c.wallSource || 'gallery', wall: c.wall, layout: c.layout, apps: c.apps, font: c.font, controls: c.controls, focus: c.focus, material: c.material, dockSize: c.dockSize, iconPack: c.iconPack, mediaBar: c.mediaBar }; }
   function materialApplies(c) { c = c || S.c; return c.bg === 'photo' && (c.layout === 'dock' || c.focus === 'glass'); }
   function derivedTheme() { return S.c.layout === 'list' ? 'list' : 'shore'; }
 
@@ -145,8 +226,22 @@
     aliases.forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
     return ids;
   }
-  function wall(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return WALLS[i]; return null; }
-  function wallIndex(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return i; return 0; }
+  function wall(id) {
+    if (!id) return null;
+    if (dynamicWallpapers[id]) return dynamicWallpapers[id];
+    for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return WALLS[i];
+    return null;
+  }
+  function wallIndex(id) {
+    var list = activeWallList();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return i;
+    for (var j = 0; j < WALLS.length; j++) if (WALLS[j].id === id) return j;
+    return 0;
+  }
+  function wallName(id) {
+    var w = wall(id);
+    return w ? w.name : 'Custom wallpaper';
+  }
   function frostClass(w) { var i = [.12, .20, .30, .36, .44].indexOf(w.frostVeil); return i > 0 ? ' fv-' + (i + 1) : ''; }
   function wallClasses(w) { return frostClass(w) + (w.listColumn ? ' lc-' + w.listColumn : '') + (w.dockQuiet ? ' db-quiet' : '') + (w.clockMist ? ' tl-mist' : ''); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -409,7 +504,8 @@
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), dockSize: pick(modern.dockSize, LOOK_VALUES.dockSize, 'medium'),
       iconPack: pick(modern.iconPack, LOOK_VALUES.iconPack, 'default'),
       mediaBar: pick(modern.mediaBar, LOOK_VALUES.mediaBar, 'full'),
-      wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
+      wallSource: pick(modern.wallSource, LOOK_VALUES.wallSource, 'gallery'),
+      wall: wall(modern.wall || s.wallpaper) ? (modern.wall || s.wallpaper) : (activeWallListForSource(modern.wallSource || 'gallery')[0] || WALLS[0]).id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
     };
@@ -461,10 +557,14 @@
     var saved = load(), initial; S.c = clean(saved); initial = next(S.c.home.slice(), S.c.recent.slice());
     S.stack = [{ id: 'home', f: { zone: 'apps', u: 0 } }];
     S.sel = S.c.lastApp; S.selIdx = S.c.home.indexOf(S.sel);
-    if (saved && initial.mode === 'open') initial.wall = WALLS[(wallIndex(initial.wall) + 1) % WALLS.length].id;
+    if (saved && initial.mode === 'open') {
+      var list = activeWallList();
+      initial.wall = (list[(wallIndex(initial.wall) + 1) % list.length] || WALLS[0]).id;
+    }
     // Keep the old schema keys alongside the builder values for in-place updates.
     try { localStorage.setItem(KEY, JSON.stringify(serialise(initial))); S.c = initial; storageOk = true; } catch (e) { storageOk = false; }
     refreshCatalog();
+    refreshWallSources();
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
@@ -718,9 +818,11 @@
     push({ id: 'editor', origin: origin, lifted: null, top: 0, otherReturn: { id: otherList()[0] || null, index: 0, top: 0 }, f: { zone: S.c.home.length ? 'home' : 'other', i: Math.max(0, i), part: 'name', h: 1, j: 0 } });
   }
   function openWallpaper() {
+    refreshWallSources();
+    var list = activeWallList();
     var i = wallIndex(S.c.wall);
     S.err = null; S.wallError = null;
-    push({ id: 'wallpaper', i: i, top: clamp(i - 2, 0, Math.max(0, WALLS.length - WALL_VISIBLE)), f: { zone: 'photo' },
+    push({ id: 'wallpaper', i: i, top: clamp(i - 2, 0, Math.max(0, list.length - WALL_VISIBLE)), f: { zone: 'photo' },
       previewTimer: 0, previewDue: null, applyPending: null, failedId: null, failedApply: false, retryBundle: null });
   }
   function isSettingsDetail(t) { return t.id === 'appearance' || t.id === 'wallpaper'; }
@@ -877,7 +979,8 @@
     if (!bundle) S.wallError = id;
   }
   function applyWallpaper(t, prepared) {
-    var w = WALLS[t.i], c, bundle = prepared || S.previewBundle;
+    var list = activeWallList();
+    var w = list[t.i] || list[0], c, bundle = prepared || S.previewBundle;
     if (!prepared && (S.wallPending || t.previewDue || S.wallShown !== w.id || S.wallError)) {
       t.applyPending = w.id;
       if (t.previewDue || S.wallPending !== w.id) { cancelWallpaperTimer(t); loadWallpaperPreview(t); }
@@ -892,19 +995,23 @@
     t.failedId = null; t.failedApply = false; t.retryBundle = null;
   }
   function loadWallpaperPreview(t) {
-    var id = WALLS[t.i].id;
+    var list = activeWallList();
+    var cur = list[t.i] || list[0];
+    var id = cur.id;
     cancelWallpaperTimer(t);
     showWall(id, function (ok) {
-      if (top() !== t || WALLS[t.i].id !== id) return;
+      var activeNow = activeWallList();
+      if (top() !== t || !activeNow[t.i] || activeNow[t.i].id !== id) return;
       if (!ok) failWallpaper(t, id, t.applyPending === id, null);
       else if (t.applyPending === id) applyWallpaper(t);
       render(); syncRotation();
     });
   }
   function previewWallpaper(t, index, apply, immediate) {
+    var list = activeWallList();
     var id, target;
     cancelWallpaperTimer(t); cancelLook();
-    t.i = index; t.f.zone = 'photo'; id = WALLS[index].id;
+    t.i = clamp(index, 0, list.length - 1); t.f.zone = 'photo'; id = list[t.i].id;
     t.applyPending = apply ? id : null; t.failedId = null; t.failedApply = false; t.retryBundle = null;
     S.err = null; S.wallError = null;
     if (id === S.c.wall && committedBundle) {
@@ -920,7 +1027,10 @@
     target = lookOf(S.c); target.wall = id;
     S.pending = { patch: { wall: id }, target: target, row: 'bg', preview: true, transient: false, deferred: true };
     t.previewDue = id;
-    t.previewTimer = setTimeout(function () { if (top() === t && WALLS[t.i].id === id) loadWallpaperPreview(t); }, WALL_DELAY);
+    t.previewTimer = setTimeout(function () {
+      var l = activeWallList();
+      if (top() === t && l[t.i] && l[t.i].id === id) loadWallpaperPreview(t);
+    }, WALL_DELAY);
   }
   function retryWallpaper(t) {
     var apply = t.failedApply, bundle = t.retryBundle;
@@ -934,13 +1044,15 @@
   }
   V.wallpaper = {
     norm: function (t) {
-      t.i = clamp(t.i, 0, WALLS.length - 1);
+      var list = activeWallList();
+      t.i = clamp(t.i, 0, Math.max(0, list.length - 1));
       if (t.f.zone === 'retry' && !t.failedId) t.f.zone = 'photo';
       if (t.i < t.top) t.top = t.i;
       if (t.i >= t.top + WALL_VISIBLE) t.top = t.i - WALL_VISIBLE + 1;
-      t.top = clamp(t.top, 0, Math.max(0, WALLS.length - WALL_VISIBLE));
+      t.top = clamp(t.top, 0, Math.max(0, list.length - WALL_VISIBLE));
     },
     key: function (t, k) {
+      var list = activeWallList();
       if (k === 'back') { closeWallpaper(t); return; }
       if (t.f.zone === 'back') {
         if (k === 'ok') closeWallpaper(t);
@@ -954,14 +1066,15 @@
       }
       if (k === 'left' || k === 'up' && t.i === 0) { t.f.zone = 'back'; t.applyPending = null; }
       else if (k === 'up' && t.i > 0) previewWallpaper(t, t.i - 1, false);
-      else if (k === 'down' && t.i < WALLS.length - 1) previewWallpaper(t, t.i + 1, false);
+      else if (k === 'down' && t.i < list.length - 1) previewWallpaper(t, t.i + 1, false);
       else if ((k === 'right' || k === 'down') && t.failedId) t.f.zone = 'retry';
       else if (k === 'ok') { if (t.retryBundle) applyWallpaper(t, t.retryBundle); else applyWallpaper(t); }
     },
     point: function (t, z, i) {
+      var list = activeWallList();
       if (z === 'wall-back') closeWallpaper(t);
       else if (z === 'wall-retry') retryWallpaper(t);
-      else if (z === 'wall-choice' && i >= 0 && i < WALLS.length) {
+      else if (z === 'wall-choice' && i >= 0 && i < list.length) {
         if (i === t.i) { t.f.zone = 'photo'; this.key(t, 'ok'); }
         else previewWallpaper(t, i, true);
       }
@@ -985,9 +1098,11 @@
   }
   function previewArt(t, index) {
     if (!t) return;
-    t.i = (index + WALLS.length) % WALLS.length;
+    var list = activeWallList();
+    if (!list.length) list = WALLS;
+    t.i = (index + list.length) % list.length;
     t.applied = false;
-    showWall(WALLS[t.i].id, function (ok) {
+    showWall(list[t.i].id, function (ok) {
       if (top() !== t) return;
       render();
     });
@@ -996,7 +1111,9 @@
   }
   function applyArtWallpaper(t) {
     if (!t) return;
-    var w = WALLS[t.i];
+    var list = activeWallList();
+    if (!list.length) list = WALLS;
+    var w = list[t.i] || list[0];
     setLook({ wall: w.id }, { row: 'wallpaper' });
     t.applied = true;
     pingArtPlaque();
@@ -1020,14 +1137,18 @@
     clearTimeout(artSlideshowTimer);
     artSlideshowTimer = setTimeout(function () {
       if (top().id === 'art') {
-        previewArt(top(), (top().i + 1) % WALLS.length);
+        var list = activeWallList();
+        if (!list.length) list = WALLS;
+        previewArt(top(), (top().i + 1) % list.length);
         render();
       }
     }, 45000);
   }
   V.art = {
     norm: function (t) {
-      t.i = clamp(t.i, 0, WALLS.length - 1);
+      var list = activeWallList();
+      if (!list.length) list = WALLS;
+      t.i = clamp(t.i, 0, list.length - 1);
     },
     key: function (t, k) {
       pingArtPlaque();
@@ -1194,7 +1315,7 @@
   function mode() { for (var i = 0; i < MODES.length; i++) if (MODES[i].id === S.c.mode) return MODES[i]; return MODES[0]; }
   function settingsRows() {
     var n = S.c.home.length;
-    return [{ id: 'background', label: 'Background', value: S.c.bg === 'photo' ? wall(S.c.wall).name : VALUE_NAMES[S.c.bg] },
+    return [{ id: 'background', label: 'Background', value: S.c.bg === 'photo' ? wallName(S.c.wall) : VALUE_NAMES[S.c.bg] },
       { id: 'layout', label: 'Layout', value: VALUE_NAMES[S.c.layout] },
       { id: 'typography', label: 'Typography', value: FONTS[S.c.font].name },
       { id: 'icons', label: 'Icon pack', value: iconPackName(S.c.iconPack) },
@@ -1232,7 +1353,8 @@
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     if (t.group === 'background') return [
       { id: 'bg', title: 'Background type', items: options('bg', ['photo', 'light', 'dark']) },
-      { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
+      { id: 'wallSource', title: 'Wallpaper source', horizontal: true, items: options('wallSource', ['gallery', 'bing', 'unsplash', 'nasa', 'local'], flat), reason: flat ? 'Choose Photo to use custom wallpaper sources.' : '' },
+      { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wallName(S.c.wall), thumbnail: true, disabled: flat }] },
       { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choose Photo to use wallpaper and rotation.' : '' }
     ];
     if (t.group === 'layout') return [
@@ -1301,7 +1423,14 @@
       if (error && error.row === 'mode') applyRotation(error.patch.mode);
       else if (error) setLook(error.patch, { row: error.row });
     } else if (item.axis === 'mode') applyRotation(item.value);
-    else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
+    else if (item.axis === 'wallSource') {
+      patch.wallSource = item.value;
+      var active = activeWallListForSource(item.value);
+      if (active.length && active.map(function (w) { return w.id; }).indexOf(S.c.wall) < 0) {
+        patch.wall = active[0].id;
+      }
+      setLook(patch, { row: item.axis });
+    } else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
     else if (item.inputId) perform(item.label, function (done) { FrameDevice.launchInput(item.inputId, done); });
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
@@ -1902,9 +2031,13 @@
         + '<div class="setting-options"' + (section.items[0].axis ? ' role="radiogroup" aria-label="' + esc(section.title || LOOK_NAMES[section.id] || DETAIL_NAMES[t.group]) + '"' : '') + '>'
         + section.items.map(function (item) {
           var swatch = item.axis === 'bg', body = '';
-          if (swatch || item.thumbnail) body += item.value === 'light' || item.value === 'dark'
-            ? '<span class="setting-swatch swatch-' + item.value + '" aria-hidden="true"></span>'
-            : '<img class="setting-swatch" src="' + WP + S.c.wall + '-thumb.jpg" alt="">';
+          if (swatch || item.thumbnail) {
+            var curW = wall(S.c.wall);
+            var thumbSrc = curW && curW.thumb ? curW.thumb : (curW && curW.src ? curW.src : (WP + S.c.wall + '-thumb.jpg'));
+            body += item.value === 'light' || item.value === 'dark'
+              ? '<span class="setting-swatch swatch-' + item.value + '" aria-hidden="true"></span>'
+              : '<img class="setting-swatch" src="' + thumbSrc + '" alt="">';
+          }
           body += '<span class="setting-copy"><span class="setting-name">' + esc(item.label) + '</span>'
             + (item.description ? '<span class="setting-description">' + esc(item.description) + '</span>' : '') + '</span>';
           if (!item.axis && !item.disabled) body += icon('right', 'setting-forward');
@@ -1922,20 +2055,25 @@
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
   function renderWallpaper(t) {
+    var list = activeWallList();
+    if (!list.length) list = WALLS;
     V.wallpaper.norm(t);
     appearanceEl.className = 'appearance detail-wallpaper';
     appearanceTitle.textContent = 'Wallpaper';
     appearanceRows.className = 'appearance-rows wallpaper-picker';
     setHTML(appearanceBack, '<button type="button" tabindex="-1" class="setting-choice setting-back' + (t.f.zone === 'back' ? ' is-focus' : '') + '" data-z="wall-back" data-action="wallpaper.back">' + icon('left') + '<span>Background</span></button>');
     setHTML(appearanceRows, '<div class="wallpaper-edge wallpaper-before" aria-hidden="true">' + icon('up') + '</div><div class="wallpaper-list" role="radiogroup" aria-label="Wallpaper"><div class="wallpaper-rows"></div></div><div class="wallpaper-edge wallpaper-after" aria-hidden="true">' + icon('down') + '</div>');
-    var rows = appearanceRows.querySelector('.wallpaper-rows'), shown = wall(S.wallShown) || wall(S.c.wall), candidate = WALLS[t.i], status, note, hint;
-    keyed(rows, WALLS.map(function (w) { return { key: w.id, wall: w }; }), function (row, item, i) {
+    var rows = appearanceRows.querySelector('.wallpaper-rows'), shown = wall(S.wallShown) || wall(S.c.wall) || list[0], candidate = list[t.i] || list[0], status, note, hint;
+    keyed(rows, list.map(function (w) { return { key: w.id, wall: w }; }), function (row, item, i) {
       var visible = i >= t.top && i < t.top + WALL_VISIBLE, w = item.wall, image;
-      setContent(row, w.id + '|' + visible, '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(w.name) + '</span></span><span class="setting-tick" aria-hidden="true"></span>');
+      var thumbSrc = w.thumb || (w.src ? w.src : (WP + w.id + '-thumb.jpg'));
+      var subtitle = w.credit || w.author || '';
+      var copyHtml = '<span class="setting-name">' + esc(w.name) + '</span>' + (subtitle ? '<span class="setting-description">' + esc(subtitle) + '</span>' : '');
+      setContent(row, w.id + '|' + visible, '<span class="wallpaper-thumb">' + (visible ? '<img src="' + thumbSrc + '" alt="">' : '') + '</span><span class="setting-copy">' + copyHtml + '</span><span class="setting-tick" aria-hidden="true"></span>');
       row.className = 'setting-choice wallpaper-choice' + (t.f.zone === 'photo' && t.i === i ? ' is-focus' : '') + (w.id === S.c.wall ? ' is-applied' : '');
       row.style.transform = 'translate3d(0,' + (i * WALL_ROW) + 'px,0)'; row.style.visibility = visible ? 'visible' : 'hidden';
       row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', w.name);
-      row.setAttribute('aria-checked', String(w.id === S.c.wall)); row.setAttribute('aria-posinset', String(i + 1)); row.setAttribute('aria-setsize', String(WALLS.length));
+      row.setAttribute('aria-checked', String(w.id === S.c.wall)); row.setAttribute('aria-posinset', String(i + 1)); row.setAttribute('aria-setsize', String(list.length));
       row.setAttribute('aria-busy', String(t.previewDue === w.id || S.wallPending === w.id));
       attrs(row, 'wall-choice', i, 'wallpaper.choose.' + w.id);
       setHTML(row.querySelector('.setting-tick'), w.id === S.c.wall ? icon('check') : '');
@@ -1948,10 +2086,10 @@
     });
     rows.style.transform = 'translate3d(0,' + (-t.top * WALL_ROW) + 'px,0)';
     appearanceRows.querySelector('.wallpaper-before').className = 'wallpaper-edge wallpaper-before' + (t.top > 0 ? ' is-on' : '');
-    appearanceRows.querySelector('.wallpaper-after').className = 'wallpaper-edge wallpaper-after' + (t.top + WALL_VISIBLE < WALLS.length ? ' is-on' : '');
+    appearanceRows.querySelector('.wallpaper-after').className = 'wallpaper-edge wallpaper-after' + (t.top + WALL_VISIBLE < list.length ? ' is-on' : '');
     note = t.previewDue ? 'Preparing ' + candidate.name + '…' : S.wallPending ? (t.applyPending ? 'Applying ' : 'Loading ') + candidate.name + '…' : shown.id === S.c.wall ? 'Applied' : 'Preview';
-    if (t.failedId) note = S.err ? 'Couldn’t save ' + wall(t.failedId).name + '.' : 'Couldn’t load ' + wall(t.failedId).name + '.';
-    status = '<p class="wallpaper-preview-name"><span>' + esc(shown.name) + '</span><span class="wallpaper-count">' + (wallIndex(shown.id) + 1) + ' of ' + WALLS.length + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
+    if (t.failedId) note = S.err ? 'Couldn’t save ' + wallName(t.failedId) + '.' : 'Couldn’t load ' + wallName(t.failedId) + '.';
+    status = '<p class="wallpaper-preview-name"><span>' + esc(shown.name) + '</span><span class="wallpaper-count">' + (wallIndex(shown.id) + 1) + ' of ' + list.length + '</span></p><p class="wallpaper-preview-state' + (t.failedId ? ' setting-error' : '') + '">' + esc(note) + '</p>';
     if (t.failedId) status += '<button type="button" tabindex="-1" class="setting-choice setting-retry' + (t.f.zone === 'retry' ? ' is-focus' : '') + '" data-z="wall-retry" data-action="wallpaper.retry">Try again</button>';
     setHTML(appearanceStatus, status);
     hint = t.f.zone === 'back' ? 'Return to Background' : t.f.zone === 'retry' ? 'Retry this photo' : 'Apply selected photo';
@@ -1967,10 +2105,12 @@
       return;
     }
     artOverlay.hidden = false;
-    var w = WALLS[t.i];
+    var list = activeWallList();
+    if (!list.length) list = WALLS;
+    var w = list[t.i] || list[0];
     if (w) {
       if (artTitle) artTitle.textContent = w.name;
-      if (artArtist) artArtist.textContent = (w.author || 'CleanFrame Curated Gallery') + ' \u00b7 ' + (t.i + 1) + ' of ' + WALLS.length;
+      if (artArtist) artArtist.textContent = (w.credit || w.author || 'CleanFrame Curated Gallery') + ' \u00b7 ' + (t.i + 1) + ' of ' + list.length;
     }
     if (artChip) {
       if (t.applied) {
@@ -2157,12 +2297,16 @@
   function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
   function bundleKey(look) { return look.wall + '|' + look.material; }
   function loadBundle(look, token, done) {
-    var imgs = { photo: makeImg('photo', WP + look.wall + '.jpg'), bg: makeImg('sheet-bg', WP + look.wall + '-panel.jpg') }, keys, left, allOk = true;
-    imgs.mat = makeImg('mat-img', matSrc(look.wall, look.material));
-    imgs.field = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.fieldAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.utility = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
-    imgs.utilityAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
+    var w = wall(look.wall);
+    var wallSrc = (w && w.src) ? w.src : (WP + look.wall + '.jpg');
+    var panelSrc = (w && w.panelSrc) ? w.panelSrc : (w && w.src ? w.src : (WP + look.wall + '-panel.jpg'));
+    var isExt = w && w.isExternal;
+    var imgs = { photo: makeImg('photo', wallSrc), bg: makeImg('sheet-bg', panelSrc) }, keys, left, allOk = true;
+    imgs.mat = makeImg('mat-img', isExt ? wallSrc : matSrc(look.wall, look.material));
+    imgs.field = makeImg('ph-field-img', isExt ? wallSrc : fieldSrc(look.wall, look.material));
+    imgs.fieldAlt = makeImg('ph-field-img', isExt ? wallSrc : fieldSrc(look.wall, look.material));
+    imgs.utility = makeImg('ph-field-img', isExt ? wallSrc : fieldSrc(look.wall, look.material));
+    imgs.utilityAlt = makeImg('ph-field-img', isExt ? wallSrc : fieldSrc(look.wall, look.material));
     keys = Object.keys(imgs); left = keys.length;
     keys.forEach(function (k) { whenReady(imgs[k], function (ok) {
       allOk = allOk && ok;
@@ -2285,7 +2429,11 @@
     activeSince = Date.now();
     rotationTimer = setTimeout(function () {
       pauseRotation(); activeMs = 0;
-      if (rotationActive()) setLook({ wall: WALLS[(wallIndex(S.c.wall) + 1) % WALLS.length].id }, { row: 'bg' });
+      if (rotationActive()) {
+        var list = activeWallList();
+        if (!list.length) list = WALLS;
+        setLook({ wall: list[(wallIndex(S.c.wall) + 1) % list.length].id }, { row: 'bg' });
+      }
     }, Math.max(10, mode().min * QA.minuteMs - activeMs));
   }
   function updateClock() {
@@ -2400,11 +2548,11 @@
   });
   document.addEventListener('keyup', function (ev) { delete heldKeys[ev.keyCode]; });
   window.addEventListener('blur', function () { heldKeys = {}; });
-  window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); });
+  window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); refreshWallSources(); });
   document.addEventListener('visibilitychange', function () {
     heldKeys = {};
     if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); clearTimeout(mediaTimer); }
-    else { release(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); focusStage(); }
+    else { release(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); refreshWallSources(); focusStage(); }
   });
   window.addEventListener('resize', fit);
 
@@ -2421,7 +2569,7 @@
     out.settingsGroup = t.id === 'wallpaper' ? 'wallpaper' : t.id === 'appearance' ? t.group : null;
     out.focusedChoice = item && item.axis ? { axis: item.axis, value: item.value, action: item.action, disabled: item.disabled } : null;
     out.candidate = out.focusedChoice ? { axis: item.axis, value: item.value, action: item.action, pending: !!S.pending, pendingTarget: S.pending ? S.pending.target : null } : null;
-    out.wallpaperPicker = t.id === 'wallpaper' ? { candidate: WALLS[t.i].id, applied: S.c.wall, shown: S.wallShown, pending: t.previewDue || S.wallPending,
+    out.wallpaperPicker = t.id === 'wallpaper' ? { candidate: (activeWallList()[t.i] || WALLS[0]).id, applied: S.c.wall, shown: S.wallShown, pending: t.previewDue || S.wallPending,
       queuedApplying: !!t.applyPending, applyPending: t.applyPending, failed: t.failedId, zone: t.f.zone, top: t.top, visible: WALL_VISIBLE, backdrop: IMG.bg.src } : null;
     out.undo = S.undo.map(function (u) { return u.label; }); out.storageOk = storageOk;
     out.nowPlaying = { access: mediaState.access, available: mediaState.available, playing: mediaState.playing, title: mediaState.title, artist: mediaState.artist, source: mediaState.source };
