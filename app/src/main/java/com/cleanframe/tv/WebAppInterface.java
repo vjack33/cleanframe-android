@@ -177,19 +177,83 @@ public class WebAppInterface {
         try {
             TvInputManager manager = (TvInputManager) activity.getSystemService(Context.TV_INPUT_SERVICE);
             if (manager == null) return array.toString();
+
+            // 1. Separate physical parent ports and child CEC devices
+            Map<String, JSONObject> parents = new java.util.LinkedHashMap<>();
+            List<JSONObject> children = new java.util.ArrayList<>();
+
             for (TvInputInfo info : manager.getTvInputList()) {
                 if (info == null || !info.isPassthroughInput()) continue;
                 String id = info.getId();
                 CharSequence sourceLabel = info.loadLabel(activity);
-                String label = sourceLabel == null ? id : sourceLabel.toString();
+                String label = sourceLabel == null ? id : sourceLabel.toString().trim();
                 boolean connected = false;
                 try {
                     connected = manager.getInputState(id) == TvInputManager.INPUT_STATE_CONNECTED;
                 } catch (Exception ignored) {}
+
+                String parentId = info.getParentId();
+
                 JSONObject item = new JSONObject();
                 item.put("id", id);
                 item.put("label", label);
                 item.put("connected", connected);
+                if (parentId != null && !parentId.isEmpty()) {
+                    item.put("parentId", parentId);
+                    children.add(item);
+                } else {
+                    parents.put(id, item);
+                }
+            }
+
+            // 2. Associate children with their parent physical ports
+            for (JSONObject child : children) {
+                String parentId = child.optString("parentId", null);
+                JSONObject parent = parentId != null ? parents.get(parentId) : null;
+
+                // Fallback: match by HDMI port number if parentId was not directly linked
+                if (parent == null) {
+                    String childId = child.optString("id", "").toLowerCase();
+                    for (Map.Entry<String, JSONObject> entry : parents.entrySet()) {
+                        String pLabel = entry.getValue().optString("label", "").toLowerCase();
+                        if (pLabel.startsWith("hdmi") && childId.contains("hdmi")) {
+                            String pNum = pLabel.replaceAll("\\D+", "");
+                            String cNum = childId.replaceAll(".*?hdmi(\\d).*", "$1");
+                            if (!pNum.isEmpty() && pNum.equals(cNum)) {
+                                parent = entry.getValue();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (parent != null) {
+                    String pLabel = parent.optString("label", "").trim();
+                    String cLabel = child.optString("label", "").trim();
+
+                    // Option 2 (Combined Label): "HDMI 1 · Mac"
+                    String combinedLabel;
+                    if (cLabel.equalsIgnoreCase(pLabel) || cLabel.toLowerCase().contains(pLabel.toLowerCase())) {
+                        combinedLabel = cLabel;
+                    } else if (pLabel.toLowerCase().contains(cLabel.toLowerCase())) {
+                        combinedLabel = pLabel;
+                    } else {
+                        combinedLabel = pLabel + " \u00B7 " + cLabel;
+                    }
+
+                    parent.put("label", combinedLabel);
+                    parent.put("connected", parent.optBoolean("connected") || child.optBoolean("connected"));
+                    // Use active CEC device ID if connected, else keep parent ID
+                    if (child.optBoolean("connected")) {
+                        parent.put("id", child.optString("id", parent.optString("id")));
+                    }
+                } else {
+                    parents.put(child.optString("id"), child);
+                }
+            }
+
+            // 3. Output combined deduplicated list
+            for (JSONObject item : parents.values()) {
                 array.put(item);
             }
         } catch (Exception e) {
@@ -204,6 +268,7 @@ public class WebAppInterface {
             if (inputId == null || inputId.isEmpty()) return "Empty input id";
             TvInputManager manager = (TvInputManager) activity.getSystemService(Context.TV_INPUT_SERVICE);
             boolean available = false;
+            String targetId = inputId;
             if (manager != null) {
                 for (TvInputInfo info : manager.getTvInputList()) {
                     if (info != null && info.isPassthroughInput() && inputId.equals(info.getId())) {
@@ -211,10 +276,22 @@ public class WebAppInterface {
                         break;
                     }
                 }
+                // Fallback: if inputId was parent and child is available or vice-versa
+                if (!available) {
+                    for (TvInputInfo info : manager.getTvInputList()) {
+                        if (info != null && info.isPassthroughInput()) {
+                            if (inputId.equals(info.getParentId())) {
+                                available = true;
+                                targetId = info.getId();
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             if (!available) return "This TV input is no longer available.";
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse("content://android.media.tv/passthrough/" + Uri.encode(inputId)));
+            intent.setData(Uri.parse("content://android.media.tv/passthrough/" + Uri.encode(targetId)));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (intent.resolveActivity(activity.getPackageManager()) == null) {
                 return "This TV does not support launching HDMI inputs.";
