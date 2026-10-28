@@ -680,14 +680,29 @@
     var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : group === 'inputs' ? (tvInputs.entries.length ? 'input.select.' + tvInputs.entries[0].id : 'input.unavailable') : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
+  function sortInputs(list) {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort(function (a, b) {
+      var la = (a.label || '').toLowerCase(), lb = (b.label || '').toLowerCase();
+      var ma = la.match(/hdmi\s*(\d+)/), mb = lb.match(/hdmi\s*(\d+)/);
+      if (ma && mb) return parseInt(ma[1], 10) - parseInt(mb[1], 10);
+      if (ma) return -1;
+      if (mb) return 1;
+      return la.localeCompare(lb);
+    });
+  }
   function refreshTVInputs() {
-    if (tvInputs.loading || tvInputs.loaded) return;
+    if (tvInputs.loading) return;
     tvInputs.loading = true;
     FrameDevice.inputs(function (err, entries) {
       tvInputs.loading = false; tvInputs.loaded = true;
       tvInputs.error = err ? err.message || 'Could not read TV inputs.' : null;
-      tvInputs.entries = err ? [] : entries;
-      if (top().id === 'appearance' && top().group === 'inputs') { top().f.action = tvInputs.entries.length ? 'input.select.' + tvInputs.entries[0].id : 'input.unavailable'; render(); }
+      tvInputs.entries = err ? [] : sortInputs(entries);
+      if (top().id === 'home') render();
+      if (top().id === 'appearance' && top().group === 'inputs') {
+        top().f.action = tvInputs.entries.length ? 'input.select.' + tvInputs.entries[0].id : 'input.unavailable';
+        render();
+      }
     });
   }
   function openInputs() { refreshTVInputs(); openAppearance('inputs'); }
@@ -714,9 +729,28 @@
 
   /* ---------- Home (browse) ---------- */
   V.home = {
+    norm: function (t) {
+      if (t.f.zone === 'inputs' && (!tvInputs.entries || !tvInputs.entries.length)) t.f.zone = 'apps';
+    },
     key: function (t, k) {
       var f = t.f, h = S.c.home, U = utils(), x = axes(), i = ensureSel();
       if (S.c.layout === 'list') { listHomeKey(t, k, i, U); return; }
+      if (f.zone === 'inputs') {
+        var nInputs = tvInputs.entries ? tvInputs.entries.length : 0;
+        f.input = clamp(f.input || 0, 0, Math.max(0, nInputs - 1));
+        if (k === 'left' && f.input > 0) f.input--;
+        else if (k === 'right' && f.input < nInputs - 1) f.input++;
+        else if (k === 'down' || k === 'back') f.zone = 'apps';
+        else if (k === 'up') {
+          if (hasMediaPanel()) { f.zone = 'media'; f.media = 0; }
+          else { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+        }
+        else if (k === 'ok' && nInputs) {
+          var entry = tvInputs.entries[f.input];
+          if (entry) perform('Input ' + entry.label, function (done) { FrameDevice.launchInput(entry.id, done); });
+        }
+        return;
+      }
       if (f.zone === 'media') {
         var isCompact = S.c.mediaBar === 'compact';
         var maxMedia = isCompact ? 1 : (mediaState.access ? 3 : 1);
@@ -724,7 +758,9 @@
         if (k === 'left' && f.media > 0) f.media--;
         else if (k === 'right' && f.media < maxMedia) f.media++;
         else if (k === 'up') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
-        else if (k === 'down' || k === 'back') f.zone = 'apps';
+        else if (k === 'down' || k === 'back') {
+          f.zone = tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps';
+        }
         else if (k === 'ok') mediaAction(f.media, isCompact);
         return;
       }
@@ -732,13 +768,23 @@
         f.u = clamp(f.u, 0, U.length - 1);
         if (k === x.prev && f.u > 0) f.u--;
         else if (k === x.next && f.u < U.length - 1) f.u++;
-        else if (k === x.inn || k === 'back') f.zone = hasMediaPanel() ? 'media' : 'apps';
+        else if (k === x.inn || k === 'back') {
+          f.zone = hasMediaPanel() ? 'media' : (tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps');
+        }
         else if (k === 'ok') { S.lastUtil = f.u; utilAction(U[f.u]); return; }
         S.lastUtil = f.u;
         return;
       }
       f.zone = 'apps';
-      if (k === x.out) { f.zone = hasMediaPanel() ? 'media' : 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+      if (k === x.out) {
+        if (tvInputs.entries && tvInputs.entries.length) {
+          f.zone = 'inputs';
+          f.input = clamp(f.input || 0, 0, tvInputs.entries.length - 1);
+        } else {
+          f.zone = hasMediaPanel() ? 'media' : 'util';
+          f.u = clamp(S.lastUtil, 0, U.length - 1);
+        }
+      }
       else if (k === 'back') openMessage('leave');
       else if (!h.length) { if (k === 'ok') addAppsRoute(); }
       else if (k === x.prev && i > 0) setSel(h[i - 1]);
@@ -747,6 +793,13 @@
     },
     point: function (t, z, i, id, action) {
       if (z === 'util') { t.f.zone = 'util'; t.f.u = i; S.lastUtil = i; }
+      else if (z === 'inputs') {
+        t.f.zone = 'inputs';
+        t.f.input = i;
+        var entry = tvInputs.entries[i];
+        if (entry) perform('Input ' + entry.label, function (done) { FrameDevice.launchInput(entry.id, done); });
+        return;
+      }
       else if (z === 'media') {
         t.f.zone = 'media';
         t.f.media = i;
@@ -762,14 +815,30 @@
   };
   function listHomeKey(t, k, i, U) {
     var f = t.f, h = S.c.home;
+    if (f.zone === 'inputs') {
+      var nInputs = tvInputs.entries ? tvInputs.entries.length : 0;
+      f.input = clamp(f.input || 0, 0, Math.max(0, nInputs - 1));
+      if (k === 'up' && f.input > 0) f.input--;
+      else if (k === 'down' && f.input < nInputs - 1) f.input++;
+      else if (k === 'left' || k === 'back') f.zone = 'apps';
+      else if (k === 'right') {
+        if (hasMediaPanel()) { f.zone = 'media'; f.media = 0; }
+        else { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+      }
+      else if (k === 'ok' && nInputs) {
+        var entry = tvInputs.entries[f.input];
+        if (entry) perform('Input ' + entry.label, function (done) { FrameDevice.launchInput(entry.id, done); });
+      }
+      return;
+    }
     if (f.zone === 'media') {
       var isCompact = S.c.mediaBar === 'compact';
       var maxMedia = isCompact ? 1 : (mediaState.access ? 3 : 1);
       f.media = clamp(f.media || 0, 0, maxMedia);
-      if (k === 'left') { if (f.media > 0) f.media--; else f.zone = 'apps'; }
+      if (k === 'left') { if (f.media > 0) f.media--; else f.zone = tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps'; }
       else if (k === 'right' && f.media < maxMedia) f.media++;
       else if (k === 'up') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
-      else if (k === 'down' || k === 'back') f.zone = 'apps';
+      else if (k === 'down' || k === 'back') f.zone = tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps';
       else if (k === 'ok') mediaAction(f.media, isCompact);
       return;
     }
@@ -777,14 +846,22 @@
       f.u = clamp(f.u, 0, U.length - 1);
       if (k === 'up' && f.u > 0) f.u--;
       else if (k === 'down' && f.u < U.length - 1) f.u++;
-      else if (k === 'left' || k === 'back') f.zone = hasMediaPanel() ? 'media' : 'apps';
+      else if (k === 'left' || k === 'back') f.zone = hasMediaPanel() ? 'media' : (tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps');
       else if (k === 'ok') { S.lastUtil = f.u; utilAction(U[f.u]); return; }
       S.lastUtil = f.u;
       return;
     }
     f.zone = 'apps';
     if (k === 'up' && i > 0) setSel(h[i - 1]);
-    else if (k === 'right') { f.zone = hasMediaPanel() ? 'media' : 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+    else if (k === 'right') {
+      if (tvInputs.entries && tvInputs.entries.length) {
+        f.zone = 'inputs';
+        f.input = clamp(f.input || 0, 0, tvInputs.entries.length - 1);
+      } else {
+        f.zone = hasMediaPanel() ? 'media' : 'util';
+        f.u = clamp(S.lastUtil, 0, U.length - 1);
+      }
+    }
     else if (k === 'down' && i < h.length - 1) setSel(h[i + 1]);
     else if (k === 'back') openMessage('leave');
     else if (k === 'ok') { if (h.length) launch(S.sel); else addAppsRoute(); }
@@ -1289,7 +1366,7 @@
 
   /* ---------- Rendering ---------- */
   var $ = function (id) { return document.getElementById(id); };
-  var stage = $('stage'), homeEl = $('home'), caption = $('caption'), nowPlayingEl = $('nowPlaying'), utilsEl = $('utils');
+  var stage = $('stage'), homeEl = $('home'), caption = $('caption'), inputsShelf = $('inputsShelf'), nowPlayingEl = $('nowPlaying'), utilsEl = $('utils');
   var utilFocusLabel = $('utilFocusLabel'), utilFocusKey = '', appFocusName = $('appFocusName');
   var artOverlay = $('artOverlay'), artPlaque = $('artPlaque'), artTitle = $('artTitle'), artArtist = $('artArtist'), artChip = $('artChip');
   var artHideTimer = 0, artSlideshowTimer = 0;
@@ -1358,9 +1435,9 @@
   }
 
   function homeState(t) {
-    var h = S.c.home, hs = { mode: 'browse', zone: null, i: Math.max(0, ensureSel()), u: -1, media: 0, lifted: false, from: -1, arr: null, items: h.map(function (id) { return { key: id, kind: 'app', id: id }; }) };
+    var h = S.c.home, hs = { mode: 'browse', zone: null, i: Math.max(0, ensureSel()), u: -1, input: 0, media: 0, lifted: false, from: -1, arr: null, items: h.map(function (id) { return { key: id, kind: 'app', id: id }; }) };
     if (isSettingsDetail(t)) hs.zone = 'preview';
-    else if (t.id === 'home') { hs.zone = t.f.zone; hs.u = t.f.u; hs.media = t.f.media || 0; }
+    else if (t.id === 'home') { hs.zone = t.f.zone; hs.u = t.f.u; hs.input = t.f.input || 0; hs.media = t.f.media || 0; }
     return hs;
   }
 
@@ -1368,10 +1445,38 @@
     var hs = homeState(t);
     renderCaption(t, hs);
     renderUtils(hs);
+    renderInputsShelf(hs);
     if (S.c.layout === 'list') renderList(hs);
     else { photoMode = null; renderDock(hs); }
     renderNowPlaying(hs);
     renderAppFocusName(hs);
+  }
+
+  function renderInputsShelf(hs) {
+    if (!inputsShelf) return;
+    var list = tvInputs.entries || [];
+    if (!list.length) {
+      inputsShelf.hidden = true;
+      setHTML(inputsShelf, '');
+      return;
+    }
+    inputsShelf.hidden = false;
+    var isInputZone = top().id === 'home' && hs.zone === 'inputs';
+    var focusedIndex = isInputZone ? clamp(hs.input, 0, list.length - 1) : -1;
+    var html = list.map(function (entry, idx) {
+      var isFocus = idx === focusedIndex;
+      var connCls = entry.connected ? ' is-connected' : ' is-disconnected';
+      var dotStatus = entry.connected ? 'Connected' : 'No signal';
+      var aria = esc(entry.label) + ', ' + dotStatus;
+      return '<button type="button" class="input-card' + connCls + (isFocus ? ' is-focus' : '') + '" '
+        + 'data-z="inputs" data-i="' + idx + '" data-id="' + esc(entry.id) + '" data-action="input.launch.' + esc(entry.id) + '" '
+        + 'aria-label="' + aria + '">'
+        + icon('tv')
+        + '<span class="input-name">' + esc(entry.label) + '</span>'
+        + '<span class="input-dot" title="' + dotStatus + '"></span>'
+        + '</button>';
+    }).join('');
+    setHTML(inputsShelf, html);
   }
 
   function mediaTime(ms) {
@@ -2295,11 +2400,11 @@
   });
   document.addEventListener('keyup', function (ev) { delete heldKeys[ev.keyCode]; });
   window.addEventListener('blur', function () { heldKeys = {}; });
-  window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); refreshNowPlaying(); });
+  window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); });
   document.addEventListener('visibilitychange', function () {
     heldKeys = {};
     if (document.hidden) { pauseRotation(); clearTimeout(clockTimer); clearTimeout(mediaTimer); }
-    else { release(); after(); updateClock(); refreshNowPlaying(); focusStage(); }
+    else { release(); after(); updateClock(); refreshNowPlaying(); refreshTVInputs(); focusStage(); }
   });
   window.addEventListener('resize', fit);
 
@@ -2347,5 +2452,5 @@
   refreshIconPackCatalog();
   initialise();
   setLook({}, { transient: true, startup: true });
-  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); refreshNowPlaying();
+  norm(); render(); fit(); focusStage(); updateClock(); syncRotation(); refreshNowPlaying(); refreshTVInputs();
 })();

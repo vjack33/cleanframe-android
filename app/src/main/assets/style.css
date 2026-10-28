@@ -43,7 +43,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .warn .ico{width:30px;height:30px;margin-top:5px}
 .error-chip{padding:6px 14px;color:var(--warn);white-space:nowrap}
 .full-name{max-width:1000px}
-.now-playing{position:absolute;z-index:4;left:480px;top:510px;width:960px;height:128px;display:flex;align-items:center;gap:20px;padding:14px 20px;border:1px solid rgba(255,255,255,.18);border-radius:26px;background:rgba(18,22,25,.75);color:#f6f1e7;box-shadow:0 24px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.24);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);transition:width 240ms var(--ease),height 240ms var(--ease),top 240ms var(--ease),left 240ms var(--ease),padding 240ms var(--ease),border-radius 240ms var(--ease),box-shadow 240ms var(--ease)}
+.now-playing{position:absolute;z-index:4;left:480px;top:440px;width:960px;height:128px;display:flex;align-items:center;gap:20px;padding:14px 20px;border:1px solid rgba(255,255,255,.18);border-radius:26px;background:rgba(18,22,25,.75);color:#f6f1e7;box-shadow:0 24px 60px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.24);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);transition:width 240ms var(--ease),height 240ms var(--ease),top 240ms var(--ease),left 240ms var(--ease),padding 240ms var(--ease),border-radius 240ms var(--ease),box-shadow 240ms var(--ease)}
 .now-playing[hidden]{display:none}
 .np-art{display:block;width:96px;height:96px;flex:none;object-fit:cover;border-radius:14px;background:linear-gradient(145deg,#b56e50,#315056 54%,#162a33);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 8px 24px rgba(0,0,0,.30)}
 .np-art-fallback{display:grid;place-items:center;color:rgba(255,248,233,.88);font-size:40px}
@@ -67,7 +67,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .np-control.np-play.is-focus{transform:scale(1.10);background:var(--plate);box-shadow:var(--plate-edge);color:#ffffff}
 .np-enable{min-width:112px;height:46px;padding:0 18px;border-radius:23px;background:rgba(255,255,255,.08);border:none;box-shadow:none;color:rgba(246,241,231,.88);font-size:16px;font-weight:600;outline:none}
 .np-enable.is-focus{outline:none;transform:scale(1.06);background:var(--plate);box-shadow:var(--plate-edge);color:#ffffff}
-.now-playing.is-compact{left:710px;top:596px;width:500px;height:56px;gap:12px;padding:8px 14px;border-radius:28px;background:rgba(18,22,25,.75);border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.22)}
+.now-playing.is-compact{left:710px;top:520px;width:500px;height:56px;gap:12px;padding:8px 14px;border-radius:28px;background:rgba(18,22,25,.75);border:1px solid rgba(255,255,255,.18);box-shadow:0 14px 40px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.22)}
 .np-pill-body{min-width:0;flex:1;display:flex;align-items:center;gap:10px;cursor:pointer;background:none;border:none;outline:none;text-align:left;padding:0}
 .np-compact-art{display:block;width:38px;height:38px;flex:none;object-fit:cover;border-radius:10px;background:linear-gradient(145deg,#b56e50,#315056 54%,#162a33);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)}
 .np-compact-art-fallback{display:grid;place-items:center;color:rgba(255,248,233,.88);font-size:20px}
@@ -84,6 +84,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .np-compact-controls .np-enable{min-width:72px;height:34px;padding:0 12px;font-size:13px;border-radius:17px}
 .l-list .now-playing{left:1120px;top:510px;width:680px}
 .l-list .now-playing.is-compact{left:1220px;top:582px;width:480px;height:56px}
+
+/* ---------- HDMI Inputs Shelf ---------- */
+.inputs-shelf{position:absolute;left:208px;top:596px;width:1504px;height:56px;display:flex;align-items:center;justify-content:center;gap:14px;z-index:3;pointer-events:auto;transition:opacity 240ms ease,transform 240ms ease}
+.inputs-shelf[hidden]{display:none}
+.input-card{position:relative;display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 20px;border-radius:18px;background:rgba(18,22,26,.48);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 24px rgba(0,0,0,.25);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:#f6f1e7;font-size:20px;font-weight:500;letter-spacing:-.3px;cursor:pointer;outline:none;transition:transform 160ms var(--ease),background 160ms var(--ease),box-shadow 160ms var(--ease),color 160ms linear}
+.input-card:hover:not(.is-focus){background:rgba(255,255,255,.16);color:#ffffff}
+.input-card.is-focus{background:var(--plate);box-shadow:var(--plate-edge),0 12px 32px rgba(0,0,0,.40);transform:scale(1.08);color:#ffffff}
+.input-card .ico{width:22px;height:22px;opacity:.88}
+.input-card .input-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25);flex:none;transition:background 180ms ease,box-shadow 180ms ease}
+.input-card.is-connected .input-dot{background:#10b981;box-shadow:0 0 8px #10b981}
+.input-card .input-name{white-space:nowrap}
+.l-list .inputs-shelf{left:1120px;top:660px;width:680px;justify-content:flex-start;gap:12px;flex-wrap:wrap;height:auto}
 .l-list .np-art{width:80px;height:80px}
 .l-list .np-title{font-size:21px;line-height:27px}
 .l-list .np-artist{font-size:16px;line-height:20px}
@@ -652,6 +664,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 /* ---------- Art Mode (The Frame Gallery Experience) ---------- */
 .at-art #dock,
 .at-art #utils,
+.at-art #inputsShelf,
 .at-art #nowPlaying,
 .at-art #caption,
 .at-art #phScene,
