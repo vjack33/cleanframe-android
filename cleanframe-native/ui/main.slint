@@ -1,6 +1,7 @@
 export struct AppItem {
     id: string,
     name: string,
+    pkg: string,
     icon: image,
 }
 
@@ -22,15 +23,18 @@ export component MainWindow inherits Window {
     default-font-family: "sans-serif";
 
     in property <string> clock_text: "1:54";
+    in property <int> wallpaper_idx: 0; // 0: Starry night, 1: Mountain valley, 2: Misty coast, 3: Alpine peaks, 4: Amber glow
+    in property <string> current_layout: "List"; // "List" | "Dock"
+
     in property <[AppItem]> apps: [
-        { id: "youtube", name: "SmartTube", icon: @image-url("assets/icons/youtube.svg") },
-        { id: "spotify", name: "Spotify", icon: @image-url("assets/icons/spotify.svg") },
-        { id: "appletv", name: "Apple TV", icon: @image-url("assets/icons/appletv.svg") },
-        { id: "primevideo", name: "Prime Video", icon: @image-url("assets/icons/primevideo.svg") },
-        { id: "netflix", name: "Netflix", icon: @image-url("assets/icons/netflix.svg") },
-        { id: "aurora", name: "Aurora Store", icon: @image-url("assets/icons/aurora.svg") },
-        { id: "projectivy", name: "Projectivy Launcher", icon: @image-url("assets/icons/projectivy.svg") },
-        { id: "settings", name: "Settings", icon: @image-url("assets/icons/settings.svg") }
+        { id: "youtube", name: "SmartTube", pkg: "org.smarttube.stable", icon: @image-url("assets/icons/youtube.svg") },
+        { id: "spotify", name: "Spotify", pkg: "com.spotify.tv.android", icon: @image-url("assets/icons/spotify.svg") },
+        { id: "appletv", name: "Apple TV", pkg: "com.apple.atve.androidtv.appletv", icon: @image-url("assets/icons/appletv.svg") },
+        { id: "primevideo", name: "Prime Video", pkg: "com.amazon.amazonvideo.livingroom", icon: @image-url("assets/icons/primevideo.svg") },
+        { id: "netflix", name: "Netflix", pkg: "com.netflix.ninja", icon: @image-url("assets/icons/netflix.svg") },
+        { id: "aurora", name: "Aurora Store", pkg: "com.aurora.store", icon: @image-url("assets/icons/aurora.svg") },
+        { id: "projectivy", name: "Projectivy Launcher", pkg: "com.spocky.projengmenu", icon: @image-url("assets/icons/projectivy.svg") },
+        { id: "settings", name: "Settings", pkg: "android.settings.SETTINGS", icon: @image-url("assets/icons/settings.svg") }
     ];
     in property <int> selected_app: 3; // Default to Prime Video matching original screenshot
 
@@ -45,10 +49,10 @@ export component MainWindow inherits Window {
     in property <[string]> utils: ["Art Mode", "All apps", "Inputs", "Settings"];
     in property <int> selected_util: 0;
 
-    in property <string> active_zone: "apps"; // "apps" | "inputs" | "util" | "settings"
+    in property <string> active_zone: "apps"; // "apps" | "inputs" | "util"
     in property <bool> settings_open: false;
     in property <[SettingItem]> settings_list: [
-        { id: "background", label: "Background", value: "Mountain valley" },
+        { id: "background", label: "Background", value: "Starry night" },
         { id: "layout", label: "Layout", value: "List" },
         { id: "typography", label: "Typography", value: "Manrope" },
         { id: "icons", label: "Icon pack", value: "CleanFrame default" },
@@ -67,126 +71,194 @@ export component MainWindow inherits Window {
     callback key_ok();
     callback key_back();
 
-    // 1. FULLSCREEN PHOTOGRAPHIC WALLPAPER
+    // 1. DYNAMIC PHOTOGRAPHIC WALLPAPER (Default: Starry night valley)
     Image {
         width: 100%;
         height: 100%;
-        source: @image-url("assets/wallpapers/valley.jpg");
+        source: (root.wallpaper_idx == 0) ? @image-url("assets/wallpapers/night.jpg") :
+                (root.wallpaper_idx == 1) ? @image-url("assets/wallpapers/valley.jpg") :
+                (root.wallpaper_idx == 2) ? @image-url("assets/wallpapers/misty.jpg") :
+                (root.wallpaper_idx == 3) ? @image-url("assets/wallpapers/alpine.jpg") :
+                @image-url("assets/wallpapers/amber.jpg");
         image-fit: cover;
     }
 
-    // Gradient scrim for optimal typography readability
+    // Subtle dark gradient scrim for contrast and depth
     Rectangle {
         width: 100%;
         height: 100%;
-        background: @linear-gradient(180deg, rgba(4, 10, 12, 0.32) 0%, rgba(4, 10, 12, 0.08) 35%, rgba(4, 10, 12, 0.38) 100%);
+        background: @linear-gradient(180deg, rgba(4, 10, 12, 0.28) 0%, rgba(4, 10, 12, 0.04) 40%, rgba(4, 10, 12, 0.36) 100%);
     }
 
-    // 2. TOP-RIGHT CLOCK
-    Text {
-        x: root.width - self.width - 56px;
-        y: 36px;
-        text: root.clock_text;
-        font-size: 40px;
-        font-weight: 500;
-        color: #f6f1e7;
-    }
-
-    // HOME ELEMENTS (Hidden when Settings is open)
+    // 2. TOP-RIGHT CLOCK & CAPTION (Hidden when Settings is open)
     if !root.settings_open: Rectangle {
         width: 100%;
         height: 100%;
 
+        Text {
+            x: root.width - self.width - 56px;
+            y: 36px;
+            text: root.clock_text;
+            font-size: 44px;
+            font-weight: 500;
+            color: #f6f1e7;
+        }
+
         // Focused item caption under clock
         Text {
             x: root.width - self.width - 56px;
-            y: 84px;
+            y: 88px;
             text: (root.active_zone == "apps") ? root.apps[root.selected_app].name :
                   (root.active_zone == "inputs") ? root.inputs[root.selected_input].label :
                   (root.active_zone == "util") ? root.utils[root.selected_util] : "";
-            font-size: 18px;
+            font-size: 19px;
             font-weight: 500;
             color: rgba(246, 241, 231, 0.92);
         }
+    }
 
-        // LEFT COLUMN: VERTICAL APPS LIST WITH VECTOR ICONS
-        Rectangle {
-            x: 52px;
-            y: 116px;
-            width: 320px;
-            height: 410px;
+    // 3. HOME ELEMENTS (Hidden when Settings is open)
+    if !root.settings_open: Rectangle {
+        width: 100%;
+        height: 100%;
+
+        // --- LIST LAYOUT (CleanFrame Authentic Sizing) ---
+        if root.current_layout == "List": Rectangle {
+            x: 56px;
+            y: 74px;
+            width: 420px;
+            height: 440px;
 
             for app[i] in root.apps: Rectangle {
-                y: i * 50px;
-                width: 270px;
-                height: 44px;
-                border-radius: 14px;
-                background: (root.active_zone == "apps" && root.selected_app == i) ?
-                    rgba(255, 255, 255, 0.15) :
-                    rgba(255, 255, 255, 0.0);
-                border-width: (root.active_zone == "apps" && root.selected_app == i) ? 1px : 0px;
-                border-color: rgba(255, 255, 255, 0.28);
+                y: i * 52px;
+                width: 320px;
+                height: 48px;
 
-                animate background { duration: 110ms; }
-
-                // App Vector Brand Icon
-                Image {
-                    x: 14px;
-                    y: 10px;
-                    width: 24px;
-                    height: 24px;
-                    source: app.icon;
-                    colorize: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.88);
+                // Focus pill (frosted capsule)
+                if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    width: 250px;
+                    height: 48px;
+                    border-radius: 24px;
+                    background: rgba(14, 20, 26, 0.55);
+                    border-width: 1.5px;
+                    border-color: rgba(255, 255, 255, 0.32);
                 }
 
-                // App Title
+                // App Brand Icon
+                Image {
+                    x: 14px;
+                    y: 11px;
+                    width: 26px;
+                    height: 26px;
+                    image-fit: contain;
+                    source: app.icon;
+                    colorize: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.85);
+                }
+
+                // App Name
                 Text {
-                    x: 48px;
-                    y: 10px;
+                    x: 52px;
+                    y: 9px;
                     text: app.name;
-                    font-size: 21px;
-                    font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 600 : 500;
+                    font-size: (root.active_zone == "apps" && root.selected_app == i) ? 27px : 24px;
+                    font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
                     color: (root.active_zone == "apps" && root.selected_app == i) ?
                         #ffffff :
-                        rgba(246, 241, 231, 0.88);
+                        rgba(246, 241, 231, 0.76);
                 }
             }
         }
 
-        // BOTTOM-RIGHT: HDMI INPUTS HORIZONTAL SHELF
+        // --- DOCK LAYOUT (Centered bottom glass dock) ---
+        if root.current_layout == "Dock": Rectangle {
+            x: (root.width - 740px) / 2;
+            y: 356px;
+            width: 740px;
+            height: 130px;
+            border-radius: 32px;
+            background: rgba(14, 20, 26, 0.65);
+            border-width: 1px;
+            border-color: rgba(255, 255, 255, 0.22);
+
+            for app[i] in root.apps: Rectangle {
+                x: 14px + i * 89px;
+                y: 14px;
+                width: 82px;
+                height: 102px;
+                border-radius: 18px;
+                background: (root.active_zone == "apps" && root.selected_app == i) ?
+                    rgba(255, 255, 255, 0.24) :
+                    rgba(255, 255, 255, 0.0);
+                border-width: (root.active_zone == "apps" && root.selected_app == i) ? 1.5px : 0px;
+                border-color: rgba(255, 255, 255, 0.45);
+
+                Image {
+                    x: (parent.width - self.width) / 2;
+                    y: 14px;
+                    width: 40px;
+                    height: 40px;
+                    image-fit: contain;
+                    source: app.icon;
+                    colorize: #ffffff;
+                }
+
+                Text {
+                    x: 4px;
+                    y: 66px;
+                    width: parent.width - 8px;
+                    horizontal-alignment: center;
+                    text: app.name;
+                    font-size: 11px;
+                    font-weight: 500;
+                    color: #ffffff;
+                    overflow: elide;
+                }
+            }
+        }
+
+        // --- HDMI INPUTS HORIZONTAL SHELF ---
         Rectangle {
-            x: 520px;
-            y: 330px;
-            width: 410px;
+            x: (root.current_layout == "List") ? 540px : (root.width - 356px) / 2;
+            y: (root.current_layout == "List") ? 332px : 304px;
+            width: 356px;
             height: 34px;
 
             for hdmi[h_idx] in root.inputs: Rectangle {
-                x: h_idx * 98px;
+                x: (h_idx == 0) ? 0px :
+                   (h_idx == 1) ? 116px :
+                   (h_idx == 2) ? 200px : 284px;
                 y: 0px;
-                width: 92px;
+                width: (h_idx == 0) ? 108px :
+                       (h_idx == 1) ? 76px :
+                       (h_idx == 2) ? 76px : 68px;
                 height: 30px;
                 border-radius: 10px;
                 background: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
-                    rgba(255, 255, 255, 0.30) :
+                    rgba(255, 255, 255, 0.32) :
                     rgba(18, 22, 26, 0.55);
                 border-width: (root.active_zone == "inputs" && root.selected_input == h_idx) ? 1.5px : 1px;
                 border-color: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
-                    rgba(255, 255, 255, 0.48) :
+                    rgba(255, 255, 255, 0.55) :
                     rgba(255, 255, 255, 0.16);
 
                 animate background { duration: 110ms; }
 
-                // TV Icon indicator
-                Text {
+                // LiveTV SVG Icon
+                Image {
                     x: 8px;
-                    y: 7px;
-                    text: "📺";
-                    font-size: 10px;
+                    y: 8px;
+                    width: 14px;
+                    height: 14px;
+                    image-fit: contain;
+                    source: @image-url("assets/icons/livetv.svg");
+                    colorize: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : rgba(255, 255, 255, 0.72);
                 }
 
                 // HDMI Label
                 Text {
-                    x: 23px;
+                    x: 25px;
                     y: 7px;
                     text: hdmi.label;
                     font-size: 11px;
@@ -206,61 +278,116 @@ export component MainWindow inherits Window {
             }
         }
 
-        // BOTTOM-RIGHT: UTILITIES VERTICAL MENU (below inputs)
-        Rectangle {
-            x: 770px;
-            y: 374px;
-            width: 140px;
+        // --- UTILITIES MENU (List mode: Right-aligned column; Dock mode: Top-right horizontal) ---
+        if root.current_layout == "List": Rectangle {
+            x: root.width - 180px - 56px;
+            y: 376px;
+            width: 180px;
             height: 140px;
 
             for u[u_idx] in root.utils: Rectangle {
                 y: u_idx * 32px;
-                width: 130px;
-                height: 26px;
-                border-radius: 8px;
+                width: 180px;
+                height: 28px;
+                border-radius: 14px;
                 background: (root.active_zone == "util" && root.selected_util == u_idx) ?
-                    rgba(255, 255, 255, 0.18) :
+                    rgba(255, 255, 255, 0.20) :
                     rgba(255, 255, 255, 0.0);
+                border-width: (root.active_zone == "util" && root.selected_util == u_idx) ? 1px : 0px;
+                border-color: rgba(255, 255, 255, 0.35);
 
                 animate background { duration: 110ms; }
 
+                // Right-aligned Label
                 Text {
-                    x: 6px;
-                    y: 4px;
+                    x: 0px;
+                    y: 5px;
+                    width: 148px;
+                    horizontal-alignment: right;
                     text: u;
-                    font-size: 14px;
+                    font-size: 15px;
                     font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 400;
                     color: (root.active_zone == "util" && root.selected_util == u_idx) ?
                         #ffffff :
-                        rgba(246, 241, 231, 0.72);
+                        rgba(246, 241, 231, 0.76);
                 }
 
-                // Right utility icon
-                Text {
-                    x: parent.width - self.width - 6px;
-                    y: 4px;
-                    text: (u_idx == 0) ? "🖼" : (u_idx == 1) ? "⊞" : (u_idx == 2) ? "📺" : "⚙";
-                    font-size: 12px;
-                    color: (root.active_zone == "util" && root.selected_util == u_idx) ?
+                // SVG Icon on far right
+                Image {
+                    x: 156px;
+                    y: 5px;
+                    width: 18px;
+                    height: 18px;
+                    image-fit: contain;
+                    source: (u_idx == 0) ? @image-url("assets/icons/art.svg") :
+                            (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
+                            (u_idx == 2) ? @image-url("assets/icons/quickpanel.svg") :
+                            @image-url("assets/icons/settings.svg");
+                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ?
                         #ffffff :
-                        rgba(255, 255, 255, 0.45);
+                        rgba(255, 255, 255, 0.60);
+                }
+            }
+        }
+
+        // Dock mode: top-right horizontal utilities
+        if root.current_layout == "Dock": Rectangle {
+            x: root.width - 480px;
+            y: 40px;
+            width: 320px;
+            height: 32px;
+
+            for u[u_idx] in root.utils: Rectangle {
+                x: u_idx * 78px;
+                y: 0px;
+                width: 74px;
+                height: 28px;
+                border-radius: 14px;
+                background: (root.active_zone == "util" && root.selected_util == u_idx) ?
+                    rgba(255, 255, 255, 0.22) :
+                    rgba(255, 255, 255, 0.0);
+                border-width: (root.active_zone == "util" && root.selected_util == u_idx) ? 1px : 0px;
+                border-color: rgba(255, 255, 255, 0.35);
+
+                Image {
+                    x: 6px;
+                    y: 6px;
+                    width: 16px;
+                    height: 16px;
+                    image-fit: contain;
+                    source: (u_idx == 0) ? @image-url("assets/icons/art.svg") :
+                            (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
+                            (u_idx == 2) ? @image-url("assets/icons/quickpanel.svg") :
+                            @image-url("assets/icons/settings.svg");
+                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(255, 255, 255, 0.65);
+                }
+
+                Text {
+                    x: 26px;
+                    y: 6px;
+                    text: (u_idx == 0) ? "Art" :
+                          (u_idx == 1) ? "Apps" :
+                          (u_idx == 2) ? "Inputs" : "Settings";
+                    font-size: 10px;
+                    font-weight: 500;
+                    color: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(246, 241, 231, 0.76);
                 }
             }
         }
     }
 
-    // 6. MODAL SETTINGS OVERVIEW SHEET (Authentic CleanFrame Style)
+    // 4. MODAL SETTINGS OVERVIEW SHEET (Authentic CleanFrame Style)
     if root.settings_open: Rectangle {
         width: 100%;
         height: 100%;
-        background: rgba(8, 12, 14, 0.50);
+        background: rgba(8, 12, 14, 0.58);
 
         // Settings Title
         Text {
             x: 56px;
-            y: 36px;
+            y: 44px;
             text: "Settings";
-            font-size: 36px;
+            font-size: 38px;
             font-weight: 500;
             color: #ffffff;
         }
@@ -268,7 +395,7 @@ export component MainWindow inherits Window {
         // Settings Items List
         for s[s_idx] in root.settings_list: Rectangle {
             x: 56px;
-            y: 92px + s_idx * 46px;
+            y: 104px + s_idx * 46px;
             width: 480px;
             height: 42px;
             border-radius: 12px;
@@ -291,52 +418,53 @@ export component MainWindow inherits Window {
                     text: s.label;
                     font-size: 15px;
                     font-weight: 600;
-                    color: (root.selected_setting == s_idx) ? #181d22 : #ffffff;
+                    color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
                 }
 
                 Text {
                     x: 0px;
-                    y: 18px;
+                    y: 17px;
                     text: s.value;
-                    font-size: 11px;
+                    font-size: 12px;
                     font-weight: 400;
-                    color: (root.selected_setting == s_idx) ?
-                        rgba(24, 29, 34, 0.75) :
-                        rgba(246, 241, 231, 0.65);
+                    color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.68);
                 }
             }
 
             // Right Chevron
             Text {
-                x: parent.width - self.width - 16px;
-                y: 10px;
-                text: "›";
-                font-size: 20px;
-                color: (root.selected_setting == s_idx) ? #181d22 : rgba(255, 255, 255, 0.4);
+                x: parent.width - 24px;
+                y: 11px;
+                text: ">";
+                font-size: 16px;
+                font-weight: 400;
+                color: (root.selected_setting == s_idx) ? #222222 : rgba(255, 255, 255, 0.45);
             }
         }
 
-        // Bottom Remote Key Hint
+        // Bottom Selected Group Action Prompt
         Rectangle {
             x: 56px;
-            y: 480px;
-            height: 26px;
-            width: 240px;
+            y: 488px;
+            height: 28px;
 
             Rectangle {
                 x: 0px;
-                y: 2px;
+                y: 0px;
                 width: 32px;
-                height: 20px;
-                border-radius: 10px;
+                height: 24px;
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.22);
                 border-width: 1px;
-                border-color: rgba(255, 255, 255, 0.7);
+                border-color: rgba(255, 255, 255, 0.4);
 
                 Text {
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
+                    x: 0px;
+                    y: 3px;
+                    width: parent.width;
+                    horizontal-alignment: center;
                     text: "OK";
-                    font-size: 10px;
+                    font-size: 11px;
                     font-weight: 700;
                     color: #ffffff;
                 }
@@ -346,8 +474,9 @@ export component MainWindow inherits Window {
                 x: 40px;
                 y: 4px;
                 text: "Open selected group";
-                font-size: 13px;
-                color: rgba(255, 255, 255, 0.75);
+                font-size: 14px;
+                font-weight: 400;
+                color: rgba(246, 241, 231, 0.88);
             }
         }
     }
