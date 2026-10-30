@@ -54,7 +54,7 @@ echo "--> Converting bytecode to DEX with d8..."
     $(find "$WORK_DIR/classes" -name "*.class")
 
 # 5. Package DEX into APK
-echo "--> Adding classes.dex and assets to APK..."
+echo "--> Adding classes.dex, assets, and native libs to APK..."
 cp "$WORK_DIR/app-base.apk" "$WORK_DIR/app-unaligned.apk"
 cd "$WORK_DIR/dex"
 zip -0 -j "$WORK_DIR/app-unaligned.apk" classes.dex
@@ -62,6 +62,15 @@ zip -0 -j "$WORK_DIR/app-unaligned.apk" classes.dex
 # Add assets directory to APK
 cd "$DIR/app/src/main"
 zip -ur "$WORK_DIR/app-unaligned.apk" assets/
+
+# Add native libraries (jniLibs) to APK
+if [ -d "$DIR/app/src/main/jniLibs" ] && [ "$(ls -A "$DIR/app/src/main/jniLibs")" ]; then
+    echo "--> Packaging native libraries (jniLibs) into lib/..."
+    mkdir -p "$WORK_DIR/apk_root/lib"
+    cp -r "$DIR/app/src/main/jniLibs/"* "$WORK_DIR/apk_root/lib/"
+    cd "$WORK_DIR/apk_root"
+    zip -0 -ur "$WORK_DIR/app-unaligned.apk" lib/
+fi
 
 # 6. Zipalign APK
 echo "--> Aligning APK with zipalign..."

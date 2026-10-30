@@ -1,0 +1,368 @@
+export struct AppItem {
+    id: string,
+    name: string,
+    icon: image,
+}
+
+export struct HdmiItem {
+    id: string,
+    label: string,
+    connected: bool,
+}
+
+export struct SettingItem {
+    id: string,
+    label: string,
+    value: string,
+}
+
+export component MainWindow inherits Window {
+    width: 960px;
+    height: 540px;
+    default-font-family: "sans-serif";
+
+    in property <string> clock_text: "1:54";
+    in property <[AppItem]> apps: [
+        { id: "youtube", name: "SmartTube", icon: @image-url("assets/icons/youtube.svg") },
+        { id: "spotify", name: "Spotify", icon: @image-url("assets/icons/spotify.svg") },
+        { id: "appletv", name: "Apple TV", icon: @image-url("assets/icons/appletv.svg") },
+        { id: "primevideo", name: "Prime Video", icon: @image-url("assets/icons/primevideo.svg") },
+        { id: "netflix", name: "Netflix", icon: @image-url("assets/icons/netflix.svg") },
+        { id: "aurora", name: "Aurora Store", icon: @image-url("assets/icons/aurora.svg") },
+        { id: "projectivy", name: "Projectivy Launcher", icon: @image-url("assets/icons/projectivy.svg") },
+        { id: "settings", name: "Settings", icon: @image-url("assets/icons/settings.svg") }
+    ];
+    in property <int> selected_app: 3; // Default to Prime Video matching original screenshot
+
+    in property <[HdmiItem]> inputs: [
+        { id: "hw1", label: "HDMI 1 · Mac", connected: true },
+        { id: "hw2", label: "HDMI 2", connected: false },
+        { id: "hw3", label: "HDMI 3", connected: true },
+        { id: "av", label: "AV", connected: false }
+    ];
+    in property <int> selected_input: 0;
+
+    in property <[string]> utils: ["Art Mode", "All apps", "Inputs", "Settings"];
+    in property <int> selected_util: 0;
+
+    in property <string> active_zone: "apps"; // "apps" | "inputs" | "util" | "settings"
+    in property <bool> settings_open: false;
+    in property <[SettingItem]> settings_list: [
+        { id: "background", label: "Background", value: "Mountain valley" },
+        { id: "layout", label: "Layout", value: "List" },
+        { id: "typography", label: "Typography", value: "Manrope" },
+        { id: "icons", label: "Icon pack", value: "CleanFrame default" },
+        { id: "focus", label: "Focus", value: "Glass, Soft" },
+        { id: "inputs", label: "TV inputs", value: "Device dependent" },
+        { id: "editor", label: "Apps on Home", value: "8 apps" },
+        { id: "samsung", label: "Samsung", value: "Home and TV settings" }
+    ];
+    in property <int> selected_setting: 0;
+
+    // Callbacks to Rust
+    callback key_up();
+    callback key_down();
+    callback key_left();
+    callback key_right();
+    callback key_ok();
+    callback key_back();
+
+    // 1. FULLSCREEN PHOTOGRAPHIC WALLPAPER
+    Image {
+        width: 100%;
+        height: 100%;
+        source: @image-url("assets/wallpapers/valley.jpg");
+        image-fit: cover;
+    }
+
+    // Gradient scrim for optimal typography readability
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: @linear-gradient(180deg, rgba(4, 10, 12, 0.32) 0%, rgba(4, 10, 12, 0.08) 35%, rgba(4, 10, 12, 0.38) 100%);
+    }
+
+    // 2. TOP-RIGHT CLOCK
+    Text {
+        x: root.width - self.width - 56px;
+        y: 36px;
+        text: root.clock_text;
+        font-size: 40px;
+        font-weight: 500;
+        color: #f6f1e7;
+    }
+
+    // HOME ELEMENTS (Hidden when Settings is open)
+    if !root.settings_open: Rectangle {
+        width: 100%;
+        height: 100%;
+
+        // Focused item caption under clock
+        Text {
+            x: root.width - self.width - 56px;
+            y: 84px;
+            text: (root.active_zone == "apps") ? root.apps[root.selected_app].name :
+                  (root.active_zone == "inputs") ? root.inputs[root.selected_input].label :
+                  (root.active_zone == "util") ? root.utils[root.selected_util] : "";
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(246, 241, 231, 0.92);
+        }
+
+        // LEFT COLUMN: VERTICAL APPS LIST WITH VECTOR ICONS
+        Rectangle {
+            x: 52px;
+            y: 116px;
+            width: 320px;
+            height: 410px;
+
+            for app[i] in root.apps: Rectangle {
+                y: i * 50px;
+                width: 270px;
+                height: 44px;
+                border-radius: 14px;
+                background: (root.active_zone == "apps" && root.selected_app == i) ?
+                    rgba(255, 255, 255, 0.15) :
+                    rgba(255, 255, 255, 0.0);
+                border-width: (root.active_zone == "apps" && root.selected_app == i) ? 1px : 0px;
+                border-color: rgba(255, 255, 255, 0.28);
+
+                animate background { duration: 110ms; }
+
+                // App Vector Brand Icon
+                Image {
+                    x: 14px;
+                    y: 10px;
+                    width: 24px;
+                    height: 24px;
+                    source: app.icon;
+                    colorize: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.88);
+                }
+
+                // App Title
+                Text {
+                    x: 48px;
+                    y: 10px;
+                    text: app.name;
+                    font-size: 21px;
+                    font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 600 : 500;
+                    color: (root.active_zone == "apps" && root.selected_app == i) ?
+                        #ffffff :
+                        rgba(246, 241, 231, 0.88);
+                }
+            }
+        }
+
+        // BOTTOM-RIGHT: HDMI INPUTS HORIZONTAL SHELF
+        Rectangle {
+            x: 520px;
+            y: 330px;
+            width: 410px;
+            height: 34px;
+
+            for hdmi[h_idx] in root.inputs: Rectangle {
+                x: h_idx * 98px;
+                y: 0px;
+                width: 92px;
+                height: 30px;
+                border-radius: 10px;
+                background: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
+                    rgba(255, 255, 255, 0.30) :
+                    rgba(18, 22, 26, 0.55);
+                border-width: (root.active_zone == "inputs" && root.selected_input == h_idx) ? 1.5px : 1px;
+                border-color: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
+                    rgba(255, 255, 255, 0.48) :
+                    rgba(255, 255, 255, 0.16);
+
+                animate background { duration: 110ms; }
+
+                // TV Icon indicator
+                Text {
+                    x: 8px;
+                    y: 7px;
+                    text: "📺";
+                    font-size: 10px;
+                }
+
+                // HDMI Label
+                Text {
+                    x: 23px;
+                    y: 7px;
+                    text: hdmi.label;
+                    font-size: 11px;
+                    font-weight: 500;
+                    color: #ffffff;
+                }
+
+                // Status Dot
+                Rectangle {
+                    x: parent.width - 12px;
+                    y: 12px;
+                    width: 5px;
+                    height: 5px;
+                    border-radius: 2.5px;
+                    background: hdmi.connected ? #10b981 : rgba(255, 255, 255, 0.3);
+                }
+            }
+        }
+
+        // BOTTOM-RIGHT: UTILITIES VERTICAL MENU (below inputs)
+        Rectangle {
+            x: 770px;
+            y: 374px;
+            width: 140px;
+            height: 140px;
+
+            for u[u_idx] in root.utils: Rectangle {
+                y: u_idx * 32px;
+                width: 130px;
+                height: 26px;
+                border-radius: 8px;
+                background: (root.active_zone == "util" && root.selected_util == u_idx) ?
+                    rgba(255, 255, 255, 0.18) :
+                    rgba(255, 255, 255, 0.0);
+
+                animate background { duration: 110ms; }
+
+                Text {
+                    x: 6px;
+                    y: 4px;
+                    text: u;
+                    font-size: 14px;
+                    font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 400;
+                    color: (root.active_zone == "util" && root.selected_util == u_idx) ?
+                        #ffffff :
+                        rgba(246, 241, 231, 0.72);
+                }
+
+                // Right utility icon
+                Text {
+                    x: parent.width - self.width - 6px;
+                    y: 4px;
+                    text: (u_idx == 0) ? "🖼" : (u_idx == 1) ? "⊞" : (u_idx == 2) ? "📺" : "⚙";
+                    font-size: 12px;
+                    color: (root.active_zone == "util" && root.selected_util == u_idx) ?
+                        #ffffff :
+                        rgba(255, 255, 255, 0.45);
+                }
+            }
+        }
+    }
+
+    // 6. MODAL SETTINGS OVERVIEW SHEET (Authentic CleanFrame Style)
+    if root.settings_open: Rectangle {
+        width: 100%;
+        height: 100%;
+        background: rgba(8, 12, 14, 0.50);
+
+        // Settings Title
+        Text {
+            x: 56px;
+            y: 36px;
+            text: "Settings";
+            font-size: 36px;
+            font-weight: 500;
+            color: #ffffff;
+        }
+
+        // Settings Items List
+        for s[s_idx] in root.settings_list: Rectangle {
+            x: 56px;
+            y: 92px + s_idx * 46px;
+            width: 480px;
+            height: 42px;
+            border-radius: 12px;
+            background: (root.selected_setting == s_idx) ?
+                #f6f1e7 :
+                rgba(255, 255, 255, 0.0);
+
+            animate background { duration: 110ms; }
+
+            // Category Label & Current Value
+            Rectangle {
+                x: 16px;
+                y: 4px;
+                width: 400px;
+                height: 34px;
+
+                Text {
+                    x: 0px;
+                    y: 0px;
+                    text: s.label;
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: (root.selected_setting == s_idx) ? #181d22 : #ffffff;
+                }
+
+                Text {
+                    x: 0px;
+                    y: 18px;
+                    text: s.value;
+                    font-size: 11px;
+                    font-weight: 400;
+                    color: (root.selected_setting == s_idx) ?
+                        rgba(24, 29, 34, 0.75) :
+                        rgba(246, 241, 231, 0.65);
+                }
+            }
+
+            // Right Chevron
+            Text {
+                x: parent.width - self.width - 16px;
+                y: 10px;
+                text: "›";
+                font-size: 20px;
+                color: (root.selected_setting == s_idx) ? #181d22 : rgba(255, 255, 255, 0.4);
+            }
+        }
+
+        // Bottom Remote Key Hint
+        Rectangle {
+            x: 56px;
+            y: 480px;
+            height: 26px;
+            width: 240px;
+
+            Rectangle {
+                x: 0px;
+                y: 2px;
+                width: 32px;
+                height: 20px;
+                border-radius: 10px;
+                border-width: 1px;
+                border-color: rgba(255, 255, 255, 0.7);
+
+                Text {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    text: "OK";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #ffffff;
+                }
+            }
+
+            Text {
+                x: 40px;
+                y: 4px;
+                text: "Open selected group";
+                font-size: 13px;
+                color: rgba(255, 255, 255, 0.75);
+            }
+        }
+    }
+
+    // Remote D-pad event capture
+    forward-focus: key_handler;
+    key_handler := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.UpArrow) { root.key_up(); accept; }
+            else if (event.text == Key.DownArrow) { root.key_down(); accept; }
+            else if (event.text == Key.LeftArrow) { root.key_left(); accept; }
+            else if (event.text == Key.RightArrow) { root.key_right(); accept; }
+            else if (event.text == Key.Return) { root.key_ok(); accept; }
+            else if (event.text == Key.Escape || event.text == Key.Back) { root.key_back(); accept; }
+            else { reject; }
+        }
+    }
+}
