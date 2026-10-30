@@ -1,5 +1,7 @@
 # Build outputs and Android generated files
 build/
+build-rust/
+cleanframe-rust.apk
 bin/
 gen/
 out/

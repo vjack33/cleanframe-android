@@ -1,3 +1,6 @@
+import "./assets/fonts/Geist-Variable.ttf";
+import "./assets/fonts/Newsreader-Variable.ttf";
+
 export struct AppItem {
     id: string,
     name: string,
@@ -17,15 +20,30 @@ export struct SettingItem {
     value: string,
 }
 
+export struct DetailOption {
+    id: string,
+    title: string,
+    desc: string,
+    active: bool,
+}
+
 export component MainWindow inherits Window {
     width: 960px;
     height: 540px;
-    default-font-family: "sans-serif";
+    default-font-family: (root.current_font == "Newsreader") ? "Newsreader" :
+                         (root.current_font == "Geist") ? "Geist" : "sans-serif";
 
+    // Appearance State Properties
     in property <string> clock_text: "1:54";
-    in property <int> wallpaper_idx: 0; // 0: Starry night, 1: Mountain valley, 2: Misty coast, 3: Alpine peaks, 4: Amber glow
+    in property <string> focused_caption: "Prime Video";
+    in property <int> wallpaper_idx: 3; // 0..14 (All 15 Curated Photographic Wallpapers)
     in property <string> current_layout: "List"; // "List" | "Dock"
+    in property <string> current_font: "Manrope"; // "Manrope" | "Newsreader" | "Geist"
+    in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Clear tint"
+    in property <string> current_focus_style: "Glass, Soft"; // "Glass, Soft" | "Minimal Pill"
+    in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
 
+    // Primary Home Apps (8 Apps)
     in property <[AppItem]> apps: [
         { id: "youtube", name: "SmartTube", pkg: "org.smarttube.stable", icon: @image-url("assets/icons/youtube.svg") },
         { id: "spotify", name: "Spotify", pkg: "com.spotify.tv.android", icon: @image-url("assets/icons/spotify.svg") },
@@ -36,8 +54,9 @@ export component MainWindow inherits Window {
         { id: "projectivy", name: "Projectivy Launcher", pkg: "com.spocky.projengmenu", icon: @image-url("assets/icons/projectivy.svg") },
         { id: "settings", name: "Settings", pkg: "android.settings.SETTINGS", icon: @image-url("assets/icons/settings.svg") }
     ];
-    in property <int> selected_app: 3; // Default to Prime Video matching original screenshot
+    in property <int> selected_app: 3;
 
+    // HDMI Inputs Shelf
     in property <[HdmiItem]> inputs: [
         { id: "hw1", label: "HDMI 1 · Mac", connected: true },
         { id: "hw2", label: "HDMI 2", connected: false },
@@ -46,13 +65,36 @@ export component MainWindow inherits Window {
     ];
     in property <int> selected_input: 0;
 
+    // Utilities Shelf: 4 Controls
     in property <[string]> utils: ["Art Mode", "All apps", "Inputs", "Settings"];
     in property <int> selected_util: 0;
 
-    in property <string> active_zone: "apps"; // "apps" | "inputs" | "util"
+    // Active Navigation Zone: "apps" | "inputs" | "util" | "media"
+    in property <string> active_zone: "apps";
+
+    // Now Playing State
+    in property <bool> now_playing_visible: true;
+    in property <string> now_playing_title: "CleanFrame Ambient";
+    in property <string> now_playing_artist: "The Frame Audio";
+    in property <bool> now_playing_playing: false;
+
+    // Art Mode State
+    in property <bool> art_mode: false;
+    in property <string> art_title: "Mountain valley";
+    in property <string> art_artist: "Aniket Deole · Unsplash";
+    in property <bool> art_saved_notice: false;
+
+    // Settings Navigation State
     in property <bool> settings_open: false;
+    in property <bool> settings_detail: false;
+    in property <string> detail_title: "Background";
+    in property <string> detail_desc: "Choose a photographic background or solid color.";
+    in property <int> selected_setting: 0;
+    in property <int> selected_detail_option: 0;
+
+    // 8 Settings Overview Items (Matching Webview Version Exactly)
     in property <[SettingItem]> settings_list: [
-        { id: "background", label: "Background", value: "Starry night" },
+        { id: "background", label: "Background", value: "Mountain valley" },
         { id: "layout", label: "Layout", value: "List" },
         { id: "typography", label: "Typography", value: "Manrope" },
         { id: "icons", label: "Icon pack", value: "CleanFrame default" },
@@ -61,9 +103,10 @@ export component MainWindow inherits Window {
         { id: "editor", label: "Apps on Home", value: "8 apps" },
         { id: "samsung", label: "Samsung", value: "Home and TV settings" }
     ];
-    in property <int> selected_setting: 0;
 
-    // Callbacks to Rust
+    in property <[DetailOption]> detail_options: [];
+
+    // Callbacks to Rust Controller
     callback key_up();
     callback key_down();
     callback key_left();
@@ -71,58 +114,73 @@ export component MainWindow inherits Window {
     callback key_ok();
     callback key_back();
 
-    // 1. DYNAMIC PHOTOGRAPHIC WALLPAPER (Default: Starry night valley)
+    // 1. DYNAMIC PHOTOGRAPHIC WALLPAPER (All 15 Curated Artworks)
     Image {
         width: 100%;
         height: 100%;
-        source: (root.wallpaper_idx == 0) ? @image-url("assets/wallpapers/night.jpg") :
-                (root.wallpaper_idx == 1) ? @image-url("assets/wallpapers/valley.jpg") :
-                (root.wallpaper_idx == 2) ? @image-url("assets/wallpapers/misty.jpg") :
-                (root.wallpaper_idx == 3) ? @image-url("assets/wallpapers/alpine.jpg") :
-                @image-url("assets/wallpapers/amber.jpg");
+        source: (root.wallpaper_idx == 0) ? @image-url("assets/wallpapers/misty.jpg") :
+                (root.wallpaper_idx == 1) ? @image-url("assets/wallpapers/cove.jpg") :
+                (root.wallpaper_idx == 2) ? @image-url("assets/wallpapers/forest.jpg") :
+                (root.wallpaper_idx == 3) ? @image-url("assets/wallpapers/valley.jpg") :
+                (root.wallpaper_idx == 4) ? @image-url("assets/wallpapers/night.jpg") :
+                (root.wallpaper_idx == 5) ? @image-url("assets/wallpapers/peaks.jpg") :
+                (root.wallpaper_idx == 6) ? @image-url("assets/wallpapers/bridge.jpg") :
+                (root.wallpaper_idx == 7) ? @image-url("assets/wallpapers/ridge.jpg") :
+                (root.wallpaper_idx == 8) ? @image-url("assets/wallpapers/golden.jpg") :
+                (root.wallpaper_idx == 9) ? @image-url("assets/wallpapers/summit.jpg") :
+                (root.wallpaper_idx == 10) ? @image-url("assets/wallpapers/goldcoast.jpg") :
+                (root.wallpaper_idx == 11) ? @image-url("assets/wallpapers/sydney.jpg") :
+                (root.wallpaper_idx == 12) ? @image-url("assets/wallpapers/amber.jpg") :
+                (root.wallpaper_idx == 13) ? @image-url("assets/wallpapers/mint.jpg") :
+                @image-url("assets/wallpapers/alpine.jpg");
         image-fit: cover;
     }
 
-    // Subtle dark gradient scrim for contrast and depth
-    Rectangle {
+    // Material Scrim Overlay
+    if !root.art_mode: Rectangle {
         width: 100%;
         height: 100%;
-        background: @linear-gradient(180deg, rgba(4, 10, 12, 0.28) 0%, rgba(4, 10, 12, 0.04) 40%, rgba(4, 10, 12, 0.36) 100%);
+        background: (root.current_material == "Clear tint") ?
+            @linear-gradient(180deg, rgba(8, 12, 16, 0.45) 0%, rgba(8, 12, 16, 0.15) 45%, rgba(8, 12, 16, 0.55) 100%) :
+            (root.current_material == "Soft") ?
+            @linear-gradient(180deg, rgba(4, 10, 12, 0.22) 0%, rgba(4, 10, 12, 0.02) 40%, rgba(4, 10, 12, 0.28) 100%) :
+            @linear-gradient(180deg, rgba(4, 10, 12, 0.28) 0%, rgba(4, 10, 12, 0.04) 40%, rgba(4, 10, 12, 0.36) 100%);
     }
 
-    // 2. TOP-RIGHT CLOCK & CAPTION (Hidden when Settings is open)
-    if !root.settings_open: Rectangle {
+    // 2. CLOCK & FOCUSED ITEM CAPTION
+    // In DOCK layout: positioned at Top-Left (matching real_tv_webview_restored.png)
+    // In LIST layout: positioned at Top-Right (matching list layout design)
+    if (!root.settings_open && !root.art_mode): Rectangle {
         width: 100%;
         height: 100%;
 
         Text {
-            x: root.width - self.width - 56px;
+            x: (root.current_layout == "Dock") ? 56px : (root.width - self.width - 56px);
             y: 36px;
             text: root.clock_text;
-            font-size: 44px;
+            font-size: 46px;
             font-weight: 500;
             color: #f6f1e7;
         }
 
-        // Focused item caption under clock
         Text {
-            x: root.width - self.width - 56px;
-            y: 88px;
-            text: (root.active_zone == "apps") ? root.apps[root.selected_app].name :
-                  (root.active_zone == "inputs") ? root.inputs[root.selected_input].label :
-                  (root.active_zone == "util") ? root.utils[root.selected_util] : "";
+            x: (root.current_layout == "Dock") ? 56px : (root.width - self.width - 56px);
+            y: 92px;
+            text: root.focused_caption;
             font-size: 19px;
             font-weight: 500;
-            color: rgba(246, 241, 231, 0.92);
+            color: rgba(246, 241, 231, 0.90);
         }
     }
 
-    // 3. HOME ELEMENTS (Hidden when Settings is open)
-    if !root.settings_open: Rectangle {
+    // 3. HOME ELEMENTS (Hidden in Art Mode & Settings)
+    if (!root.settings_open && !root.art_mode): Rectangle {
         width: 100%;
         height: 100%;
 
-        // --- LIST LAYOUT (CleanFrame Authentic Sizing) ---
+        // ==========================================
+        // --- LIST LAYOUT (Photographic Typography) ---
+        // ==========================================
         if root.current_layout == "List": Rectangle {
             x: 56px;
             y: 74px;
@@ -134,16 +192,27 @@ export component MainWindow inherits Window {
                 width: 320px;
                 height: 48px;
 
-                // Focus pill (frosted capsule)
+                // Focus pill (Liquid Frosted Glass Capsule with Specular Highlight)
                 if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
                     x: 0px;
                     y: 0px;
-                    width: 250px;
+                    width: 260px;
                     height: 48px;
                     border-radius: 24px;
-                    background: rgba(14, 20, 26, 0.55);
+                    background: (root.current_focus_style == "Minimal Pill") ?
+                        rgba(255, 255, 255, 0.20) :
+                        @linear-gradient(170deg, rgba(255, 255, 255, 0.32) 0%, rgba(20, 26, 32, 0.58) 55%, rgba(12, 16, 22, 0.68) 100%);
                     border-width: 1.5px;
-                    border-color: rgba(255, 255, 255, 0.32);
+                    border-color: rgba(255, 255, 255, 0.40);
+
+                    // Specular highlight rim line
+                    if (root.current_focus_style == "Glass, Soft"): Rectangle {
+                        x: 18px;
+                        y: 1px;
+                        width: parent.width - 36px;
+                        height: 1px;
+                        background: rgba(255, 255, 255, 0.50);
+                    }
                 }
 
                 // App Brand Icon
@@ -154,7 +223,9 @@ export component MainWindow inherits Window {
                     height: 26px;
                     image-fit: contain;
                     source: app.icon;
-                    colorize: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.85);
+                    colorize: (root.current_icon_pack == "Full Color") ?
+                        #ffffff :
+                        ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.85));
                 }
 
                 // App Name
@@ -162,90 +233,155 @@ export component MainWindow inherits Window {
                     x: 52px;
                     y: 9px;
                     text: app.name;
-                    font-size: (root.active_zone == "apps" && root.selected_app == i) ? 27px : 24px;
+                    font-size: (root.active_zone == "apps" && root.selected_app == i) ? 26px : 24px;
                     font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
-                    color: (root.active_zone == "apps" && root.selected_app == i) ?
-                        #ffffff :
-                        rgba(246, 241, 231, 0.76);
+                    color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.78);
                 }
             }
         }
 
-        // --- DOCK LAYOUT (Centered bottom glass dock) ---
+        // ==========================================
+        // --- DOCK LAYOUT (Liquid Frosted Glass) ---
+        // ==========================================
         if root.current_layout == "Dock": Rectangle {
-            x: (root.width - 740px) / 2;
-            y: 356px;
-            width: 740px;
-            height: 130px;
-            border-radius: 32px;
-            background: rgba(14, 20, 26, 0.65);
-            border-width: 1px;
-            border-color: rgba(255, 255, 255, 0.22);
+            x: (root.width - 760px) / 2;
+            y: 342px;
+            width: 760px;
+            height: 124px;
 
-            for app[i] in root.apps: Rectangle {
-                x: 14px + i * 89px;
-                y: 14px;
-                width: 82px;
-                height: 102px;
-                border-radius: 18px;
-                background: (root.active_zone == "apps" && root.selected_app == i) ?
-                    rgba(255, 255, 255, 0.24) :
-                    rgba(255, 255, 255, 0.0);
-                border-width: (root.active_zone == "apps" && root.selected_app == i) ? 1.5px : 0px;
-                border-color: rgba(255, 255, 255, 0.45);
+            // 1. Mat Outer Drop Shadow
+            Rectangle {
+                width: 100%;
+                height: 100%;
+                border-radius: 28px;
+                background: rgba(0, 0, 0, 0.45);
+            }
 
-                Image {
-                    x: (parent.width - self.width) / 2;
-                    y: 14px;
-                    width: 40px;
-                    height: 40px;
-                    image-fit: contain;
-                    source: app.icon;
-                    colorize: #ffffff;
+            // 2. Liquid Glass Backdrop Mat (Exact match to .mat in style.css)
+            Rectangle {
+                width: 100%;
+                height: 100%;
+                border-radius: 28px;
+                background: (root.current_material == "Clear tint") ?
+                    @linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(12, 16, 20, 0.72) 28%, rgba(8, 10, 14, 0.84) 100%) :
+                    (root.current_material == "Soft") ?
+                    @linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(22, 28, 36, 0.44) 28%, rgba(14, 18, 24, 0.56) 100%) :
+                    @linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(20, 26, 34, 0.48) 28%, rgba(12, 16, 22, 0.62) 100%);
+                border-width: 1.5px;
+                border-color: rgba(255, 255, 255, 0.24);
+
+                // Top specular reflection rim
+                Rectangle {
+                    x: 24px;
+                    y: 1.5px;
+                    width: parent.width - 48px;
+                    height: 1.5px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
                 }
+            }
 
-                Text {
-                    x: 4px;
-                    y: 66px;
-                    width: parent.width - 8px;
-                    horizontal-alignment: center;
-                    text: app.name;
-                    font-size: 11px;
-                    font-weight: 500;
-                    color: #ffffff;
-                    overflow: elide;
+            // 3. Sliding Carousel Track
+            Rectangle {
+                x: 16px;
+                y: 14px;
+                width: 728px;
+                height: 96px;
+                clip: true;
+
+                Rectangle {
+                    x: -clamp((root.selected_app - 2) * 128px, 0px, 280px);
+                    y: 0px;
+                    width: 1040px;
+                    height: 96px;
+
+                    animate x { duration: 160ms; }
+
+                    for app[i] in root.apps: Rectangle {
+                        x: i * 128px;
+                        y: 0px;
+                        width: 120px;
+                        height: 96px;
+                        border-radius: 18px;
+
+                        // Focused Tile Liquid Glass Plate (.plate.on-focus)
+                        if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 18px;
+                            background: (root.current_focus_style == "Minimal Pill") ?
+                                rgba(255, 255, 255, 0.22) :
+                                @linear-gradient(170deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.10) 58%, rgba(255, 255, 255, 0.14) 100%);
+                            border-width: 1.5px;
+                            border-color: rgba(255, 255, 255, 0.30);
+
+                            // Tile top specular highlight rim
+                            if (root.current_focus_style == "Glass, Soft"): Rectangle {
+                                x: 12px;
+                                y: 1px;
+                                width: parent.width - 24px;
+                                height: 1px;
+                                background: rgba(255, 255, 255, 0.60);
+                            }
+                        }
+
+                        // App Brand Icon
+                        Image {
+                            x: (parent.width - self.width) / 2;
+                            y: (root.active_zone == "apps" && root.selected_app == i) ? 14px : 16px;
+                            width: (root.active_zone == "apps" && root.selected_app == i) ? 36px : 32px;
+                            height: (root.active_zone == "apps" && root.selected_app == i) ? 36px : 32px;
+                            image-fit: contain;
+                            source: app.icon;
+                            colorize: #ffffff;
+                        }
+
+                        // App Label
+                        Text {
+                            x: 4px;
+                            y: 58px;
+                            width: parent.width - 8px;
+                            horizontal-alignment: center;
+                            text: app.name;
+                            font-size: (root.active_zone == "apps" && root.selected_app == i) ? 13px : 12px;
+                            font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 600 : 500;
+                            color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.82);
+                            overflow: elide;
+                        }
+                    }
                 }
             }
         }
 
-        // --- HDMI INPUTS HORIZONTAL SHELF ---
+        // ==========================================
+        // --- HDMI INPUTS SHELF ---
+        // ==========================================
         Rectangle {
-            x: (root.current_layout == "List") ? 540px : (root.width - 356px) / 2;
-            y: (root.current_layout == "List") ? 332px : 304px;
-            width: 356px;
-            height: 34px;
+            x: (root.current_layout == "List") ? 540px : (root.width - 364px) / 2;
+            y: (root.current_layout == "List") ? 332px : 296px;
+            width: 364px;
+            height: 32px;
 
             for hdmi[h_idx] in root.inputs: Rectangle {
                 x: (h_idx == 0) ? 0px :
-                   (h_idx == 1) ? 116px :
-                   (h_idx == 2) ? 200px : 284px;
+                   (h_idx == 1) ? 118px :
+                   (h_idx == 2) ? 204px : 290px;
                 y: 0px;
-                width: (h_idx == 0) ? 108px :
-                       (h_idx == 1) ? 76px :
-                       (h_idx == 2) ? 76px : 68px;
+                width: (h_idx == 0) ? 112px :
+                       (h_idx == 1) ? 80px :
+                       (h_idx == 2) ? 80px : 70px;
                 height: 30px;
                 border-radius: 10px;
                 background: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
-                    rgba(255, 255, 255, 0.32) :
-                    rgba(18, 22, 26, 0.55);
+                    @linear-gradient(170deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.18) 100%) :
+                    @linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(16, 20, 26, 0.55) 100%);
                 border-width: (root.active_zone == "inputs" && root.selected_input == h_idx) ? 1.5px : 1px;
                 border-color: (root.active_zone == "inputs" && root.selected_input == h_idx) ?
-                    rgba(255, 255, 255, 0.55) :
-                    rgba(255, 255, 255, 0.16);
+                    rgba(255, 255, 255, 0.65) :
+                    rgba(255, 255, 255, 0.18);
 
                 animate background { duration: 110ms; }
 
-                // LiveTV SVG Icon
+                // LiveTV Icon
                 Image {
                     x: 8px;
                     y: 8px;
@@ -253,7 +389,7 @@ export component MainWindow inherits Window {
                     height: 14px;
                     image-fit: contain;
                     source: @image-url("assets/icons/livetv.svg");
-                    colorize: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : rgba(255, 255, 255, 0.72);
+                    colorize: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : rgba(255, 255, 255, 0.75);
                 }
 
                 // HDMI Label
@@ -273,12 +409,15 @@ export component MainWindow inherits Window {
                     width: 5px;
                     height: 5px;
                     border-radius: 2.5px;
-                    background: hdmi.connected ? #10b981 : rgba(255, 255, 255, 0.3);
+                    background: hdmi.connected ? #10b981 : rgba(255, 255, 255, 0.28);
                 }
             }
         }
 
-        // --- UTILITIES MENU (List mode: Right-aligned column; Dock mode: Top-right horizontal) ---
+        // ==========================================
+        // --- UTILITIES CONTROLS ---
+        // ==========================================
+        // List mode: Right-aligned vertical column
         if root.current_layout == "List": Rectangle {
             x: root.width - 180px - 56px;
             y: 376px;
@@ -291,14 +430,13 @@ export component MainWindow inherits Window {
                 height: 28px;
                 border-radius: 14px;
                 background: (root.active_zone == "util" && root.selected_util == u_idx) ?
-                    rgba(255, 255, 255, 0.20) :
+                    rgba(255, 255, 255, 0.22) :
                     rgba(255, 255, 255, 0.0);
                 border-width: (root.active_zone == "util" && root.selected_util == u_idx) ? 1px : 0px;
-                border-color: rgba(255, 255, 255, 0.35);
+                border-color: rgba(255, 255, 255, 0.38);
 
                 animate background { duration: 110ms; }
 
-                // Right-aligned Label
                 Text {
                     x: 0px;
                     y: 5px;
@@ -307,12 +445,9 @@ export component MainWindow inherits Window {
                     text: u;
                     font-size: 15px;
                     font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 400;
-                    color: (root.active_zone == "util" && root.selected_util == u_idx) ?
-                        #ffffff :
-                        rgba(246, 241, 231, 0.76);
+                    color: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(246, 241, 231, 0.78);
                 }
 
-                // SVG Icon on far right
                 Image {
                     x: 156px;
                     y: 5px;
@@ -323,34 +458,36 @@ export component MainWindow inherits Window {
                             (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
                             (u_idx == 2) ? @image-url("assets/icons/quickpanel.svg") :
                             @image-url("assets/icons/settings.svg");
-                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ?
-                        #ffffff :
-                        rgba(255, 255, 255, 0.60);
+                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(255, 255, 255, 0.65);
                 }
             }
         }
 
-        // Dock mode: top-right horizontal utilities
+        // Dock mode: Top-Right horizontal utilities (Matching real_tv_webview_restored.png)
         if root.current_layout == "Dock": Rectangle {
-            x: root.width - 480px;
-            y: 40px;
-            width: 320px;
+            x: root.width - 430px;
+            y: 36px;
+            width: 374px;
             height: 32px;
 
             for u[u_idx] in root.utils: Rectangle {
-                x: u_idx * 78px;
+                x: (u_idx == 0) ? 0px :
+                   (u_idx == 1) ? 104px :
+                   (u_idx == 2) ? 198px : 282px;
                 y: 0px;
-                width: 74px;
+                width: (u_idx == 0) ? 98px :
+                       (u_idx == 1) ? 88px :
+                       (u_idx == 2) ? 78px : 88px;
                 height: 28px;
                 border-radius: 14px;
                 background: (root.active_zone == "util" && root.selected_util == u_idx) ?
-                    rgba(255, 255, 255, 0.22) :
+                    rgba(255, 255, 255, 0.24) :
                     rgba(255, 255, 255, 0.0);
                 border-width: (root.active_zone == "util" && root.selected_util == u_idx) ? 1px : 0px;
-                border-color: rgba(255, 255, 255, 0.35);
+                border-color: rgba(255, 255, 255, 0.38);
 
                 Image {
-                    x: 6px;
+                    x: 8px;
                     y: 6px;
                     width: 16px;
                     height: 16px;
@@ -359,124 +496,412 @@ export component MainWindow inherits Window {
                             (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
                             (u_idx == 2) ? @image-url("assets/icons/quickpanel.svg") :
                             @image-url("assets/icons/settings.svg");
-                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(255, 255, 255, 0.65);
+                    colorize: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(255, 255, 255, 0.75);
                 }
 
                 Text {
-                    x: 26px;
+                    x: 28px;
                     y: 6px;
-                    text: (u_idx == 0) ? "Art" :
-                          (u_idx == 1) ? "Apps" :
-                          (u_idx == 2) ? "Inputs" : "Settings";
-                    font-size: 10px;
+                    text: u;
+                    font-size: 12px;
                     font-weight: 500;
-                    color: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(246, 241, 231, 0.76);
+                    color: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(246, 241, 231, 0.78);
+                }
+            }
+        }
+
+        // ==========================================
+        // --- NOW PLAYING MUSIC BAR ---
+        // ==========================================
+        if (root.now_playing_visible): Rectangle {
+            x: (root.current_layout == "List") ? 540px : (root.width - 230px) / 2;
+            y: (root.current_layout == "List") ? 284px : 252px;
+            width: 230px;
+            height: 36px;
+            border-radius: 18px;
+            background: (root.active_zone == "media") ?
+                @linear-gradient(170deg, rgba(255, 255, 255, 0.32) 0%, rgba(20, 26, 32, 0.58) 100%) :
+                @linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(12, 16, 22, 0.55) 100%);
+            border-width: (root.active_zone == "media") ? 1.5px : 1px;
+            border-color: (root.active_zone == "media") ? rgba(255, 255, 255, 0.60) : rgba(255, 255, 255, 0.20);
+
+            // Music note icon
+            Image {
+                x: 10px;
+                y: 10px;
+                width: 16px;
+                height: 16px;
+                image-fit: contain;
+                source: @image-url("assets/icons/applemusic.svg");
+                colorize: #ffffff;
+            }
+
+            // Track & Artist text
+            Text {
+                x: 32px;
+                y: 5px;
+                width: 160px;
+                text: root.now_playing_title;
+                font-size: 11px;
+                font-weight: 600;
+                color: #ffffff;
+                overflow: elide;
+            }
+
+            Text {
+                x: 32px;
+                y: 19px;
+                width: 160px;
+                text: root.now_playing_artist;
+                font-size: 9px;
+                font-weight: 400;
+                color: rgba(246, 241, 231, 0.70);
+                overflow: elide;
+            }
+
+            // Play / Pause glyph
+            Text {
+                x: parent.width - 20px;
+                y: 11px;
+                text: root.now_playing_playing ? "❚❚" : "▶";
+                font-size: 11px;
+                color: #ffffff;
+            }
+        }
+    }
+
+    // ==========================================
+    // 4. ART MODE OVERLAY (Ambient Gallery View)
+    // ==========================================
+    if root.art_mode: Rectangle {
+        width: 100%;
+        height: 100%;
+
+        // Ambient Floating Plaque
+        Rectangle {
+            x: 56px;
+            y: root.height - 130px;
+            width: 440px;
+            height: 80px;
+            border-radius: 20px;
+            background: @linear-gradient(180deg, rgba(20, 26, 34, 0.65) 0%, rgba(12, 16, 22, 0.85) 100%);
+            border-width: 1.5px;
+            border-color: rgba(255, 255, 255, 0.25);
+
+            Text {
+                x: 20px;
+                y: 12px;
+                text: root.art_title;
+                font-size: 20px;
+                font-weight: 600;
+                color: #ffffff;
+            }
+
+            Text {
+                x: 20px;
+                y: 36px;
+                text: root.art_artist;
+                font-size: 12px;
+                font-weight: 400;
+                color: rgba(246, 241, 231, 0.75);
+            }
+
+            Text {
+                x: 20px;
+                y: 56px;
+                text: "‹ › Browse  ·  OK Set as wallpaper  ·  Back Exit";
+                font-size: 10px;
+                font-weight: 500;
+                color: rgba(246, 241, 231, 0.50);
+            }
+
+            // Confirmation chip when wallpaper is set
+            if root.art_saved_notice: Rectangle {
+                x: parent.width - 130px;
+                y: 14px;
+                width: 116px;
+                height: 24px;
+                border-radius: 12px;
+                background: #10b981;
+
+                Text {
+                    x: 0px;
+                    y: 4px;
+                    width: parent.width;
+                    horizontal-alignment: center;
+                    text: "✓ Wallpaper Set";
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: #ffffff;
                 }
             }
         }
     }
 
-    // 4. MODAL SETTINGS OVERVIEW SHEET (Authentic CleanFrame Style)
+    // ==========================================
+    // 5. MODAL SETTINGS SHEET
+    // ==========================================
     if root.settings_open: Rectangle {
         width: 100%;
         height: 100%;
-        background: rgba(8, 12, 14, 0.58);
+        background: rgba(8, 12, 14, 0.65);
 
-        // Settings Title
-        Text {
-            x: 56px;
-            y: 44px;
-            text: "Settings";
-            font-size: 38px;
-            font-weight: 500;
-            color: #ffffff;
-        }
+        // LEVEL 0: SETTINGS OVERVIEW LIST (Exact Match to real_tv_settings_opened.png)
+        if !root.settings_detail: Rectangle {
+            width: 100%;
+            height: 100%;
 
-        // Settings Items List
-        for s[s_idx] in root.settings_list: Rectangle {
-            x: 56px;
-            y: 104px + s_idx * 46px;
-            width: 480px;
-            height: 42px;
-            border-radius: 12px;
-            background: (root.selected_setting == s_idx) ?
-                #f6f1e7 :
-                rgba(255, 255, 255, 0.0);
+            // Title
+            Text {
+                x: 56px;
+                y: 36px;
+                text: "Settings";
+                font-size: 42px;
+                font-weight: 500;
+                color: #ffffff;
+            }
 
-            animate background { duration: 110ms; }
+            // Clock in Top-Right
+            Text {
+                x: root.width - self.width - 56px;
+                y: 36px;
+                text: root.clock_text;
+                font-size: 46px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.65);
+            }
 
-            // Category Label & Current Value
-            Rectangle {
-                x: 16px;
-                y: 4px;
-                width: 400px;
-                height: 34px;
+            // 8 Settings Categories
+            for s[s_idx] in root.settings_list: Rectangle {
+                x: 56px;
+                y: 86px + s_idx * 48px;
+                width: 480px;
+                height: 44px;
+                border-radius: 16px;
+                background: (root.selected_setting == s_idx) ?
+                    #f6f1e7 :
+                    rgba(255, 255, 255, 0.0);
+
+                animate background { duration: 110ms; }
+
+                Rectangle {
+                    x: 18px;
+                    y: 4px;
+                    width: 400px;
+                    height: 36px;
+
+                    Text {
+                        x: 0px;
+                        y: 0px;
+                        text: s.label;
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
+                    }
+
+                    Text {
+                        x: 0px;
+                        y: 18px;
+                        text: s.value;
+                        font-size: 12px;
+                        font-weight: 400;
+                        color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.68);
+                    }
+                }
 
                 Text {
+                    x: parent.width - 24px;
+                    y: 11px;
+                    text: "›";
+                    font-size: 18px;
+                    font-weight: 400;
+                    color: (root.selected_setting == s_idx) ? #222222 : rgba(255, 255, 255, 0.45);
+                }
+            }
+
+            // Bottom Prompt Bar
+            Rectangle {
+                x: 56px;
+                y: 494px;
+                height: 28px;
+
+                Rectangle {
                     x: 0px;
                     y: 0px;
-                    text: s.label;
-                    font-size: 15px;
-                    font-weight: 600;
-                    color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
+                    width: 32px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.22);
+                    border-width: 1px;
+                    border-color: rgba(255, 255, 255, 0.4);
+
+                    Text {
+                        x: 0px;
+                        y: 3px;
+                        width: parent.width;
+                        horizontal-alignment: center;
+                        text: "OK";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #ffffff;
+                    }
                 }
 
                 Text {
-                    x: 0px;
-                    y: 17px;
-                    text: s.value;
-                    font-size: 12px;
+                    x: 40px;
+                    y: 4px;
+                    text: "Open selected group";
+                    font-size: 14px;
                     font-weight: 400;
-                    color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.68);
+                    color: rgba(246, 241, 231, 0.88);
                 }
-            }
-
-            // Right Chevron
-            Text {
-                x: parent.width - 24px;
-                y: 11px;
-                text: ">";
-                font-size: 16px;
-                font-weight: 400;
-                color: (root.selected_setting == s_idx) ? #222222 : rgba(255, 255, 255, 0.45);
             }
         }
 
-        // Bottom Selected Group Action Prompt
-        Rectangle {
-            x: 56px;
-            y: 488px;
-            height: 28px;
+        // LEVEL 1: DETAILED SUBMENU OPTIONS
+        if root.settings_detail: Rectangle {
+            width: 100%;
+            height: 100%;
 
+            // Back Header: ‹ Settings
             Rectangle {
-                x: 0px;
-                y: 0px;
-                width: 32px;
-                height: 24px;
-                border-radius: 12px;
-                background: rgba(255, 255, 255, 0.22);
-                border-width: 1px;
-                border-color: rgba(255, 255, 255, 0.4);
+                x: 56px;
+                y: 32px;
+                width: 120px;
+                height: 28px;
+                border-radius: 14px;
+                background: (root.selected_detail_option == -1) ? #f6f1e7 : rgba(255, 255, 255, 0.16);
 
                 Text {
-                    x: 0px;
-                    y: 3px;
-                    width: parent.width;
-                    horizontal-alignment: center;
-                    text: "OK";
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: #ffffff;
+                    x: 12px;
+                    y: 5px;
+                    text: "‹ Settings";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: (root.selected_detail_option == -1) ? #111111 : #ffffff;
                 }
             }
 
+            // Clock in Top-Right
             Text {
-                x: 40px;
-                y: 4px;
-                text: "Open selected group";
-                font-size: 14px;
+                x: root.width - self.width - 56px;
+                y: 36px;
+                text: root.clock_text;
+                font-size: 46px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.65);
+            }
+
+            // Submenu Title
+            Text {
+                x: 56px;
+                y: 68px;
+                text: root.detail_title;
+                font-size: 32px;
+                font-weight: 600;
+                color: #ffffff;
+            }
+
+            // Submenu Description
+            Text {
+                x: 56px;
+                y: 104px;
+                text: root.detail_desc;
+                font-size: 13px;
                 font-weight: 400;
-                color: rgba(246, 241, 231, 0.88);
+                color: rgba(246, 241, 231, 0.70);
+            }
+
+            // Submenu Options List (Scrollable offset)
+            Rectangle {
+                x: 56px;
+                y: 134px;
+                width: 540px;
+                height: 350px;
+                clip: true;
+
+                for opt[o_idx] in root.detail_options: Rectangle {
+                    x: 0px;
+                    y: (o_idx * 50px) - ((root.selected_detail_option > 5) ? (root.selected_detail_option - 5) * 50px : 0px);
+                    width: 520px;
+                    height: 46px;
+                    border-radius: 14px;
+                    background: (root.selected_detail_option == o_idx) ?
+                        #f6f1e7 :
+                        rgba(255, 255, 255, 0.08);
+
+                    animate background { duration: 110ms; }
+                    animate y { duration: 120ms; }
+
+                    // Selection radio dot
+                    Rectangle {
+                        x: 16px;
+                        y: 17px;
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 6px;
+                        border-width: 1.5px;
+                        border-color: (root.selected_detail_option == o_idx) ? #111111 : rgba(255, 255, 255, 0.5);
+                        background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #10b981) : rgba(0, 0, 0, 0);
+                    }
+
+                    // Title & Description
+                    Text {
+                        x: 38px;
+                        y: 6px;
+                        text: opt.title;
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: (root.selected_detail_option == o_idx) ? #111111 : #ffffff;
+                    }
+
+                    Text {
+                        x: 38px;
+                        y: 24px;
+                        text: opt.desc;
+                        font-size: 11px;
+                        font-weight: 400;
+                        color: (root.selected_detail_option == o_idx) ? #444444 : rgba(246, 241, 231, 0.65);
+                    }
+                }
+            }
+
+            // Bottom Prompt
+            Rectangle {
+                x: 56px;
+                y: 494px;
+                height: 28px;
+
+                Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    width: 32px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.22);
+                    border-width: 1px;
+                    border-color: rgba(255, 255, 255, 0.4);
+
+                    Text {
+                        x: 0px;
+                        y: 3px;
+                        width: parent.width;
+                        horizontal-alignment: center;
+                        text: "OK";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #ffffff;
+                    }
+                }
+
+                Text {
+                    x: 40px;
+                    y: 4px;
+                    text: "Select option  ·  Back to return";
+                    font-size: 14px;
+                    font-weight: 400;
+                    color: rgba(246, 241, 231, 0.88);
+                }
             }
         }
     }
