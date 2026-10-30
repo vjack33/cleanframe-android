@@ -14,6 +14,7 @@
   var CAP = 9, SCRIM_Y = 560;
   var DOCK_MODES = { both: { tw: 288, th: 200, pitch: 296 }, text: { tw: 288, th: 104, pitch: 296 }, icons: { tw: 176, th: 144, pitch: 184 } };
   var DOCK_SIZE_SCALE = { small: .68, medium: 1, large: 1.18 };
+  var LIST_SIZE_SCALE = { small: .78, medium: 1, large: 1.22 };
   var GRID_ROW = 240, GRID_COL = 344, COLS = 5;
   var ED_ROW = 80, ED_SEP = 56, ED_VIEW = 752, STRIP_PITCH = 188;
   var PH_TOP = 220, PH_PITCH = 128, PH_FULL = 5, PH_HEIGHT = 944, PH_COMPACT_TOP = 144, PH_COMPACT_PITCH = 88, PH_COMPACT_VISIBLE = 9;
@@ -423,15 +424,19 @@
   function reducedDockLabel(id) { return S.c.apps !== 'icons' && dockLabelSize(id) === (S.c.apps === 'text' ? 34 : 32); }
   function actionWidth(text) { return clamp(Math.ceil(textWidth(text, 30, 500, -.3) + 40), 288, 400); }
   function photoLabel(id, compact) {
-    var text = app(id).name, size = compact ? 56 : 88, limit = compact ? 640 : 992, width = textWidth(text, size, 600, -1.8, 'display');
-    if (!compact && width > limit) { size = 76; width = textWidth(text, size, 600, -1.8, 'display'); }
+    var scale = (compact || (S.c && S.c.layout !== 'list')) ? 1 : (LIST_SIZE_SCALE[(S.c && S.c.dockSize) || 'medium'] || 1);
+    var text = app(id).name, baseSize = compact ? 56 : Math.round(88 * scale), limit = compact ? 640 : Math.round(992 * scale);
+    var size = baseSize, width = textWidth(text, size, 600, -1.8, 'display');
+    if (!compact && width > limit) { size = Math.round(76 * scale); width = textWidth(text, size, 600, -1.8, 'display'); }
     // Newsreader's ninth compact Type row otherwise enters the lower fade by .63px.
-    return { size: size, top: (compact ? 10.66 : size === 76 ? 10.36 : 9.68) + fontShift('display', size) - (compact && homeFont() === 'newsreader' ? .7 : 0), width: Math.min(limit, width), ellipsis: width > limit };
+    var top = ((compact ? 10.66 : size <= Math.round(76 * scale) ? 10.36 : 9.68) * scale) + fontShift('display', size) - (compact && homeFont() === 'newsreader' ? .7 : 0);
+    return { size: size, top: top, width: Math.min(limit, width), ellipsis: width > limit };
   }
   function listPlateWidth(id, compact) {
-    if (S.c.apps === 'icons') return compact ? 120 : 144;
+    var scale = (compact || (S.c && S.c.layout !== 'list')) ? 1 : (LIST_SIZE_SCALE[(S.c && S.c.dockSize) || 'medium'] || 1);
+    if (S.c.apps === 'icons') return Math.round((compact ? 120 : 144) * scale);
     var text = S.c.apps === 'text';
-    return clamp(Math.ceil(photoLabel(id, compact).width + (text ? 84 : compact ? 156 : 184)), text ? 280 : 360, text ? compact ? 724 : 1076 : compact ? 796 : 1176);
+    return clamp(Math.ceil(photoLabel(id, compact).width + (text ? 84 * scale : compact ? 156 : 184 * scale)), Math.round((text ? 280 : 360) * scale), text ? compact ? 724 : 1076 : compact ? 796 : 1176);
   }
 
   /* Keyed children: elements persist by key so transforms animate instead of re-creating.
@@ -1343,7 +1348,7 @@
     else if (id === 'inputs') openInputs();
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', icons: 'Icon pack', focus: 'Focus', rotation: 'Rotation', inputs: 'TV inputs', samsung: 'Samsung' };
+  var DETAIL_NAMES = { background: 'Background', wallSource: 'Wallpaper source', layout: 'Layout', typography: 'Typography', icons: 'Icon pack', focus: 'Focus', rotation: 'Rotation', inputs: 'TV inputs', samsung: 'Samsung' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Both' : VALUE_NAMES[value] };
@@ -1353,15 +1358,27 @@
     function options(axis, values, disabled) { return values.map(function (value) { return choice(axis, value, disabled); }); }
     if (t.group === 'background') return [
       { id: 'bg', title: 'Background type', items: options('bg', ['photo', 'light', 'dark']) },
-      { id: 'wallSource', title: 'Wallpaper source', horizontal: true, items: options('wallSource', ['gallery', 'bing', 'unsplash', 'nasa', 'local'], flat), reason: flat ? 'Choose Photo to use custom wallpaper sources.' : '' },
+      { id: 'wallSource', title: 'Wallpaper source', items: [{ action: 'background.wallSource', label: VALUE_NAMES[S.c.wallSource] || 'Curated gallery', disabled: flat }], reason: flat ? 'Choose Photo to use custom wallpaper sources.' : '' },
       { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wallName(S.c.wall), thumbnail: true, disabled: flat }] },
       { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choose Photo to use wallpaper and rotation.' : '' }
     ];
+    if (t.group === 'wallSource') return [{
+      id: 'wallSource',
+      title: '',
+      items: [
+        { action: 'choice.wallSource.gallery', axis: 'wallSource', value: 'gallery', label: 'Curated gallery', description: 'Curated high-resolution art and photography' },
+        { action: 'choice.wallSource.bing', axis: 'wallSource', value: 'bing', label: 'Bing Daily', description: 'Daily featured photography from Microsoft Bing (8-day archive)' },
+        { action: 'choice.wallSource.unsplash', axis: 'wallSource', value: 'unsplash', label: 'Unsplash', description: 'Curated photography from Unsplash' },
+        { action: 'choice.wallSource.nasa', axis: 'wallSource', value: 'nasa', label: 'NASA Astronomy', description: 'Astronomy Picture of the Day from NASA' },
+        { action: 'choice.wallSource.local', axis: 'wallSource', value: 'local', label: 'Local & USB', description: 'Photos from device storage and connected USB drives' }
+      ],
+      reason: flat ? 'Choose Photo in Background to use custom wallpaper sources.' : ''
+    }];
     if (t.group === 'layout') return [
       { id: 'layout', title: 'Layout', horizontal: true, items: options('layout', ['list', 'dock']) },
       { id: 'apps', title: 'App display', horizontal: true, items: options('apps', ['text', 'icons', 'both']) },
       { id: 'controls', title: 'Home controls', horizontal: true, items: options('controls', ['text', 'icons', 'both']) },
-      { id: 'dockSize', title: 'Dock size', horizontal: true, items: options('dockSize', ['small', 'medium', 'large']) },
+      { id: 'dockSize', title: S.c.layout === 'list' ? 'Text size' : 'Dock size', horizontal: true, items: options('dockSize', ['small', 'medium', 'large']) },
       { id: 'mediaBar', title: 'Music bar', horizontal: true, items: options('mediaBar', ['full', 'compact', 'hidden']) }
     ];
     if (t.group === 'typography') return [{ id: 'font', title: '', items: options('font', LOOK_VALUES.font) }];
@@ -1385,7 +1402,7 @@
     ] }];
   }
   function detailRows(t) {
-    var rows = [[{ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }]];
+    var rows = [[{ action: 'settings.back', label: (t.group === 'rotation' || t.group === 'wallSource') ? 'Background' : 'Settings' }]];
     detailSections(t).forEach(function (section) {
       var enabled = section.items.filter(function (item) { return !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
@@ -1432,6 +1449,7 @@
       setLook(patch, { row: item.axis });
     } else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
     else if (item.inputId) perform(item.label, function (done) { FrameDevice.launchInput(item.inputId, done); });
+    else if (item.action === 'background.wallSource') openAppearance('wallSource');
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
     else if (item.action === 'samsung.home') perform('Samsung Home', FrameDevice.home);
@@ -1440,7 +1458,7 @@
   V.appearance = {
     norm: function (t) {
       var rows = detailRows(t), exists = false, applied = null;
-      var axis = { background: 'bg', layout: 'layout', typography: 'font', icons: 'iconPack', focus: 'focus', rotation: 'mode' }[t.group];
+      var axis = { background: 'bg', wallSource: 'wallSource', layout: 'layout', typography: 'font', icons: 'iconPack', focus: 'focus', rotation: 'mode' }[t.group];
       rows.forEach(function (items) { items.forEach(function (item) {
         if (item.action === t.f.action) exists = true;
         if (item.axis === axis && item.value === S.c[axis]) applied = item;
@@ -1811,24 +1829,8 @@
     body = S.c.apps === 'text' ? '' : appMark(a, S.c.apps === 'icons' ? 136 : 120, S.c.apps === 'icons' ? 88 : 72, S.c.apps === 'icons' ? 72 : 58);
     return body + (S.c.apps === 'icons' ? '' : '<span class="label" style="font-size:' + dockLabelSize(a.id) + 'px;top:' + ((S.c.apps === 'text' ? 28 : 128) + fontShift('primary', dockLabelSize(a.id))) + 'px"><span class="label-ink">' + esc(a.name) + '</span></span>') + '<span class="nudge nudge-l">' + icon('left') + '</span><span class="nudge nudge-r">' + icon('right') + '</span>';
   }
-  /* A wide label can reach the shelf before its icon. Check the rendered icon box,
-     including during the track's 180ms transition, so both disappear together. */
-  function syncDockEdges() {
-    var broad = S.c.layout === 'dock' && S.geom === 'broad', clip = shelf.getBoundingClientRect(), changes = [];
-    Array.prototype.forEach.call(track.querySelectorAll('.tile'), function (tile) {
-      var content = tile.querySelector(S.c.apps === 'text' ? '.label-ink' : '.mark'), r = content ? content.getBoundingClientRect() : null;
-      var outside = broad && r && (r.right <= clip.left || r.left >= clip.right);
-      var cls = tile.className.replace(/\s+is-outside-icon/g, '') + (outside ? ' is-outside-icon' : '');
-      if (tile.className !== cls) changes.push({ tile: tile, cls: cls });
-    });
-    changes.forEach(function (change) { change.tile.className = change.cls; });
-  }
-  function trackDockEdges() {
-    dockEdgeFrame = 0;
-    if (S.c.layout !== 'dock' || S.geom !== 'broad') return;
-    syncDockEdges();
-    if (Date.now() < dockEdgeUntil) dockEdgeFrame = window.requestAnimationFrame(trackDockEdges);
-  }
+  function syncDockEdges() {}
+  function trackDockEdges() {}
 
   function renderDock(hs) {
     var items = hs.items, n = items.length, empty = hs.mode !== 'arrange' && !n, g = dockGeom(empty ? -1 : n);
@@ -1854,8 +1856,9 @@
     keyed(track, empty ? [] : items, function (el, it, i) {
       var a = it.id ? app(it.id) : null, left = i * g.pitch, focus = tileFocus && i === anchor, sel = tileSel && i === anchor;
       var lifted = hs.lifted && i === anchor, partial = g.broad && (left - off < -1 || left + g.tw - off > g.shelf + 1);
+      var outside = g.broad && (left - off + g.tw <= 0 || left - off >= g.shelf);
       setContent(el, it.kind + '|' + (it.id || '') + '|' + (it.id ? dockLabelSize(it.id) : full) + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont() + '|' + S.c.iconPack, '<span class="tile-content">' + dockTileHtml(it, full) + '</span>');
-      el.className = 'tile k-' + it.kind + (focus ? ' is-focus' : '') + (sel ? ' is-sel' : '') + (lifted ? ' is-lifted' : '') + (partial ? ' is-partial' : '')
+      el.className = 'tile k-' + it.kind + (focus ? ' is-focus' : '') + (sel ? ' is-sel' : '') + (lifted ? ' is-lifted' : '') + (partial ? ' is-partial' : '') + (outside ? ' is-outside-icon' : '')
         + (a && !a.mark ? ' is-text' : '') + (it.kind === 'add' && full ? ' is-full' : '') + (it.kind === 'app' && S.press === it.id ? ' is-press' : '')
         + (lifted && i === 0 ? ' no-l' : '') + (lifted && i >= ns - 1 ? ' no-r' : '');
       el.style.transform = 'translate3d(' + left + 'px,0,0)';
@@ -1865,11 +1868,6 @@
       else attrs(el, 'app', i, 'home.app.' + it.id);
     });
     track.style.transform = 'translate3d(' + (-off) + 'px,0,0)';
-    syncDockEdges();
-    if (g.broad) {
-      dockEdgeUntil = Date.now() + 220;
-      if (!dockEdgeFrame) dockEdgeFrame = window.requestAnimationFrame(trackDockEdges);
-    }
     plate.className = 'plate' + (!n || empty || hs.zone === null ? '' : hs.lifted ? ' on-lift' : tileFocus ? ' on-focus' : tileSel ? ' on-sel' : '');
     plate.style.transform = 'translate3d(' + (anchor * g.pitch) + 'px,0,0)';
 
@@ -1936,7 +1934,10 @@
     el.style.transform = 'translate3d(' + (-x) + 'px,' + (-y) + 'px,0)' + (S.c.bg === 'photo' && S.c.material === 'tint' && !REDUCED_MOTION ? ' scale(1.04)' : '');
   }
   function renderList(hs) {
-    var items = hs.items, n = items.length, compact = hs.mode === 'arrange', pitch = compact ? PH_COMPACT_PITCH : PH_PITCH;
+    var items = hs.items, n = items.length, compact = hs.mode === 'arrange';
+    var scale = (compact || (S.c && S.c.layout !== 'list')) ? 1 : (LIST_SIZE_SCALE[(S.c && S.c.dockSize) || 'medium'] || 1);
+    var pitch = compact ? PH_COMPACT_PITCH : Math.round(PH_PITCH * scale);
+    var plateHeight = compact ? 88 : Math.round(134 * scale);
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), first, off, width, slot, y, s, label, aw, plateState;
     var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview';
     photoModeTransition(compact);
@@ -1945,8 +1946,9 @@
       first = clamp(first, 0, Math.max(0, n - PH_COMPACT_VISIBLE));
       scroll.photoArrange = first;
     } else {
-      first = clamp(scroll.photo, anchor - 3, anchor - 1);
-      first = clamp(first, 0, Math.max(0, n - PH_FULL));
+      var visFull = Math.max(3, Math.min(6, Math.floor(640 / pitch)));
+      first = clamp(scroll.photo, anchor - (scale > 1.1 ? 2 : 3), anchor - 1);
+      first = clamp(first, 0, Math.max(0, n - visFull));
       scroll.photo = first;
     }
     off = first * pitch; slot = anchor - first;
@@ -1956,9 +1958,15 @@
     phRows.style.top = (compact ? 72 : 148) + 'px';
     keyed(phRows, items, function (row, it, i) {
       var typography = photoLabel(it.id, compact), focus = rowFocus && i === anchor, lifted = hs.lifted && i === anchor, markImage, body = '';
-      if (S.c.apps !== 'text') body += appMark(app(it.id), S.c.apps === 'icons' ? compact ? 64 : 88 : compact ? 60 : 84, S.c.apps === 'icons' ? compact ? 64 : 88 : compact ? 44 : 64, S.c.apps === 'icons' ? compact ? 52 : 72 : compact ? 42 : 54);
-      if (S.c.apps !== 'icons') body += '<span class="ph-name" style="font-size:' + typography.size + 'px;top:' + typography.top + 'px">' + esc(app(it.id).name) + '</span>';
-      setContent(row, it.id + '|' + typography.size + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont() + '|' + S.c.iconPack, '<span class="ph-group">' + body + '</span><span class="ph-move ph-move-up">' + icon('up') + '</span><span class="ph-move ph-move-down">' + icon('down') + '</span>');
+      if (S.c.apps !== 'text') {
+        var mw = Math.round((S.c.apps === 'icons' ? (compact ? 64 : 88) : (compact ? 60 : 84)) * scale);
+        var mh = Math.round((S.c.apps === 'icons' ? (compact ? 64 : 88) : (compact ? 44 : 64)) * scale);
+        var mi = Math.round((S.c.apps === 'icons' ? (compact ? 52 : 72) : (compact ? 42 : 54)) * scale);
+        body += appMark(app(it.id), mw, mh, mi);
+      }
+      var nameLeft = S.c.apps === 'text' ? (compact ? 28 : Math.round(28 * scale)) : Math.round((compact ? 100 : 128) * scale);
+      if (S.c.apps !== 'icons') body += '<span class="ph-name" style="font-size:' + typography.size + 'px;top:' + typography.top + 'px;left:' + nameLeft + 'px">' + esc(app(it.id).name) + '</span>';
+      setContent(row, it.id + '|' + typography.size + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont() + '|' + S.c.iconPack + '|' + (S.c.dockSize || 'medium'), '<span class="ph-group">' + body + '</span><span class="ph-move ph-move-up">' + icon('up') + '</span><span class="ph-move ph-move-down">' + icon('down') + '</span>');
       markImage = row.querySelector('.mark img');
       if (markImage) {
         markImage.onerror = function () { this.style.visibility = 'hidden'; };
@@ -1975,7 +1983,7 @@
     phRows.style.transform = 'translate3d(0,' + (-off) + 'px,0)';
     y = (compact ? PH_COMPACT_TOP + 2 : PH_TOP + 1) + slot * pitch;
     plateState = !n || hs.zone === null ? '' : hs.lifted ? 'on-lift' : S.c.focus === 'glass' && rowFocus ? 'on-focus' : S.c.focus === 'glass' && remembered ? 'on-sel' : '';
-    renderPhotoPlate(items[anchor] ? items[anchor].id : '', width, compact ? 88 : 134, y, plateState);
+    renderPhotoPlate(items[anchor] ? items[anchor].id : '', width, plateHeight, y, plateState);
     if (compact && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && items[anchor]) {
       s = hs.arr.slots[anchor]; label = (s.removed ? 'Restore ' : 'Remove ') + app(s.id).name; aw = actionWidth(label);
       setHTML(phAction, '<span>' + esc(label) + '</span>');
@@ -2024,7 +2032,8 @@
         + ' data-z="detail" data-i="0" data-id="' + item.action + '" data-action="' + item.action + '">' + inner
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
-    setHTML(appearanceBack, command({ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }, icon('left') + '<span>' + (t.group === 'rotation' ? 'Background' : 'Settings') + '</span>', 'setting-back'));
+    var backLabel = (t.group === 'rotation' || t.group === 'wallSource') ? 'Background' : 'Settings';
+    setHTML(appearanceBack, command({ action: 'settings.back', label: backLabel }, icon('left') + '<span>' + backLabel + '</span>', 'setting-back'));
     setHTML(appearanceRows, detailSections(t).map(function (section) {
       return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + ' section-' + section.id + '">'
         + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + section.title + '</h3>' : '')

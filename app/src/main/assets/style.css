@@ -135,7 +135,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 
 /* ---------- Glass Dock ---------- */
 .dock{position:absolute;left:208px;top:676px;width:1504px;height:232px}
-.mat{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:48px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(20,26,34,.48) 30%,rgba(12,16,22,.62) 100%);border:1px solid rgba(255,255,255,.22);box-shadow:0 28px 70px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.36),inset 0 -1px 0 rgba(255,255,255,.08);backdrop-filter:blur(30px) saturate(175%);-webkit-backdrop-filter:blur(30px) saturate(175%)}
+.mat{position:absolute;left:0;top:0;right:0;bottom:0;border-radius:48px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(20,26,34,.48) 30%,rgba(12,16,22,.62) 100%);border:1px solid rgba(255,255,255,.22);box-shadow:0 28px 70px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.36),inset 0 -1px 0 rgba(255,255,255,.08);backdrop-filter:blur(30px) saturate(175%);-webkit-backdrop-filter:blur(30px) saturate(175%);isolation:isolate;contain:paint;transform:translateZ(0);will-change:transform}
 .mat-img,.mat-scrim{display:none}
 .mat-veil{display:none}
 .m-frost .mat{background:linear-gradient(180deg,rgba(255,255,255,.16) 0%,rgba(20,26,34,.46) 28%,rgba(12,16,22,.60) 100%);border:1px solid rgba(255,255,255,.24);box-shadow:0 28px 70px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.38),inset 0 -1px 0 rgba(255,255,255,.08);backdrop-filter:blur(32px) saturate(180%);-webkit-backdrop-filter:blur(32px) saturate(180%)}
@@ -152,7 +152,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .shelf.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.2),#000 132px,#000 calc(100% - 132px),rgba(0,0,0,.2));mask-image:linear-gradient(to right,rgba(0,0,0,.2),#000 132px,#000 calc(100% - 132px),rgba(0,0,0,.2))}
 .track{position:absolute;left:0;top:0;height:232px;transition:transform var(--t) var(--ease);will-change:transform}
 .plate{position:absolute;left:0;top:16px;width:288px;height:200px;border-radius:32px;opacity:0;transition:transform var(--t) var(--ease),opacity 120ms linear;will-change:transform}
-.plate.on-focus{opacity:1;background:linear-gradient(170deg,rgba(255,255,255,.28),rgba(255,255,255,.08) 58%,rgba(255,255,255,.12));border:1px solid rgba(255,255,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.30);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.plate.on-focus{opacity:1;background:linear-gradient(170deg,rgba(255,255,255,.28),rgba(255,255,255,.08) 58%,rgba(255,255,255,.12));border:1px solid rgba(255,255,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.30)}
 .plate.on-sel{opacity:1;background:rgba(255,255,255,.11)}
 .plate.on-lift{opacity:1;background:linear-gradient(170deg,rgba(255,255,255,.36),rgba(255,255,255,.14) 58%,rgba(255,255,255,.18));border:1px solid rgba(255,255,255,.28);box-shadow:0 16px 40px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.38)}
 .m-frost .dock .plate.on-focus{background:linear-gradient(170deg,rgba(255,255,255,.32),rgba(255,255,255,.10) 58%,rgba(255,255,255,.14))}
@@ -224,8 +224,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .ph-rows{position:absolute;left:0;top:0;width:1200px;transition:transform var(--t) var(--ease);will-change:transform}
 .ph-row{position:absolute;left:0;top:0;width:1200px;height:128px;transition:transform var(--t) var(--ease)}
 .ph-group{position:absolute;left:0;top:0;width:100%;height:100%;opacity:.8;transform-origin:28px 64px;transition:opacity 160ms linear,transform var(--t) var(--ease)}
-.ph-group .mark{position:absolute;left:28px;top:32px}
-.ph-name{position:absolute;left:128px;top:10px;max-width:992px;font-size:88px;line-height:104px;font-weight:600;letter-spacing:-1.8px;color:var(--ph-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(14,10,6,.32),0 3px 14px rgba(14,10,6,.24)}
+.ph-group .mark{position:absolute;left:28px;top:50%;transform:translateY(-50%)}
+.ph-name{position:absolute;left:128px;top:10px;max-width:992px;font-size:88px;line-height:1.16;font-weight:600;letter-spacing:-1.8px;color:var(--ph-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(14,10,6,.32),0 3px 14px rgba(14,10,6,.24)}
 .f-glass .ph-row.is-focus .ph-group,.f-glass .ph-row.is-sel .ph-group{opacity:1}
 .f-glass .ph-row.is-focus .ph-name,.ph-row.is-lifted .ph-name{text-shadow:0 1px 2px rgba(14,10,6,.22)}
 .f-type .ph-group{opacity:.62}
@@ -563,17 +563,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .is-horizontal .setting-tick{width:26px;margin-left:0}
 .is-horizontal .setting-tick .ico{width:26px;height:26px}
 .section-material .setting-choice:last-child{flex:1.4}
-.section-wallSource .setting-options{flex-wrap:wrap;gap:8px}
-.section-wallSource .setting-choice{min-height:68px;padding:8px 14px;font-size:24px;line-height:32px;gap:8px}
-.section-wallSource .setting-choice .setting-name{white-space:nowrap}
-.detail-background .section-rotation .setting-choice{padding-left:128px}
 .detail-layout .appearance-rows{top:210px}
 .detail-layout .setting-section+.setting-section{margin-top:20px}
 .detail-layout .is-horizontal .setting-choice{min-height:74px;padding:10px 16px;font-size:32px}
 .detail-layout .setting-label{margin-bottom:8px;font-size:24px;line-height:30px}
 .detail-focus .setting-section+.setting-section{margin-top:64px}
-.detail-typography .setting-choice,.detail-rotation .setting-choice{min-height:88px}
-.detail-typography .appearance-rows,.detail-rotation .appearance-rows,.detail-samsung .appearance-rows{top:260px}
+.detail-typography .setting-choice,.detail-rotation .setting-choice,.detail-wallSource .setting-choice{min-height:88px}
+.detail-typography .appearance-rows,.detail-rotation .appearance-rows,.detail-wallSource .appearance-rows,.detail-samsung .appearance-rows{top:240px}
 .setting-choice.has-description{min-height:120px}
 .setting-description{font-size:26px;line-height:36px;font-weight:400;letter-spacing:0;color:var(--mute);white-space:normal}
 .setting-choice.is-focus .setting-description{color:var(--solid-mute)}
