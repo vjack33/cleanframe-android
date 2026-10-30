@@ -210,14 +210,25 @@ public class MainActivity extends Activity {
         }
 
         if (keyName != null && webView != null) {
-            String eventType = (event.getAction() == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            String script = "document.dispatchEvent(new KeyboardEvent('" + eventType + "', { "
-                    + "key: '" + keyName + "', "
-                    + "code: '" + keyName + "', "
-                    + "keyCode: " + jsKeyCode + ", "
-                    + "which: " + jsKeyCode + ", "
-                    + "bubbles: true, cancelable: true }));";
-            webView.evaluateJavascript(script, null);
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                String script = "window.onTvKeyDown ? window.onTvKeyDown(" + jsKeyCode + ") : document.dispatchEvent(new KeyboardEvent('keydown', { "
+                        + "key: '" + keyName + "', "
+                        + "code: '" + keyName + "', "
+                        + "keyCode: " + jsKeyCode + ", "
+                        + "which: " + jsKeyCode + ", "
+                        + "bubbles: true, cancelable: true }));";
+                webView.evaluateJavascript(script, null);
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (jsKeyCode == 13 || jsKeyCode == 27) {
+                    String script = "window.onTvKeyUp ? window.onTvKeyUp(" + jsKeyCode + ") : document.dispatchEvent(new KeyboardEvent('keyup', { "
+                            + "key: '" + keyName + "', "
+                            + "code: '" + keyName + "', "
+                            + "keyCode: " + jsKeyCode + ", "
+                            + "which: " + jsKeyCode + ", "
+                            + "bubbles: true, cancelable: true }));";
+                    webView.evaluateJavascript(script, null);
+                }
+            }
             return true;
         }
         return super.dispatchKeyEvent(event);

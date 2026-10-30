@@ -838,6 +838,11 @@
   V.home = {
     norm: function (t) {
       if (t.f.zone === 'inputs' && (!tvInputs.entries || !tvInputs.entries.length)) t.f.zone = 'apps';
+      if (t.f.zone === 'media' && !hasMediaPanel()) t.f.zone = 'apps';
+      if (t.f.zone === 'util') {
+        var U = utils();
+        t.f.u = clamp(t.f.u !== undefined ? t.f.u : (S.lastUtil !== undefined ? S.lastUtil : 0), 0, U.length - 1);
+      }
     },
     key: function (t, k) {
       var f = t.f, h = S.c.home, U = utils(), x = axes(), i = ensureSel();
@@ -922,15 +927,27 @@
   };
   function listHomeKey(t, k, i, U) {
     var f = t.f, h = S.c.home;
+    var nInputs = tvInputs.entries ? tvInputs.entries.length : 0;
+    var hasInputs = nInputs > 0;
+    var hasMedia = hasMediaPanel();
+
     if (f.zone === 'inputs') {
-      var nInputs = tvInputs.entries ? tvInputs.entries.length : 0;
       f.input = clamp(f.input || 0, 0, Math.max(0, nInputs - 1));
-      if (k === 'up' && f.input > 0) f.input--;
-      else if (k === 'down' && f.input < nInputs - 1) f.input++;
-      else if (k === 'left' || k === 'back') f.zone = 'apps';
+      if (k === 'left') {
+        if (f.input > 0) f.input--;
+        else f.zone = 'apps';
+      }
       else if (k === 'right') {
-        if (hasMediaPanel()) { f.zone = 'media'; f.media = 0; }
-        else { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
+        if (f.input < nInputs - 1) f.input++;
+      }
+      else if (k === 'up') {
+        if (hasMedia) { f.zone = 'media'; f.media = 0; S.lastRightZone = 'media'; }
+      }
+      else if (k === 'down') {
+        f.zone = 'util'; f.u = 0; S.lastRightZone = 'util';
+      }
+      else if (k === 'back') {
+        f.zone = 'apps';
       }
       else if (k === 'ok' && nInputs) {
         var entry = tvInputs.entries[f.input];
@@ -938,40 +955,100 @@
       }
       return;
     }
+
     if (f.zone === 'media') {
       var isCompact = S.c.mediaBar === 'compact';
       var maxMedia = isCompact ? 1 : (mediaState.access ? 3 : 1);
       f.media = clamp(f.media || 0, 0, maxMedia);
-      if (k === 'left') { if (f.media > 0) f.media--; else f.zone = tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps'; }
-      else if (k === 'right' && f.media < maxMedia) f.media++;
-      else if (k === 'up') { f.zone = 'util'; f.u = clamp(S.lastUtil, 0, U.length - 1); }
-      else if (k === 'down' || k === 'back') f.zone = tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps';
-      else if (k === 'ok') mediaAction(f.media, isCompact);
+      if (k === 'left') {
+        if (f.media > 0) f.media--;
+        else f.zone = 'apps';
+      }
+      else if (k === 'right') {
+        if (f.media < maxMedia) f.media++;
+      }
+      else if (k === 'down') {
+        if (hasInputs) { f.zone = 'inputs'; f.input = 0; S.lastRightZone = 'inputs'; }
+        else { f.zone = 'util'; f.u = 0; S.lastRightZone = 'util'; }
+      }
+      else if (k === 'back') {
+        f.zone = 'apps';
+      }
+      else if (k === 'ok') {
+        mediaAction(f.media, isCompact);
+      }
       return;
     }
+
     if (f.zone === 'util') {
-      f.u = clamp(f.u, 0, U.length - 1);
-      if (k === 'up' && f.u > 0) f.u--;
-      else if (k === 'down' && f.u < U.length - 1) f.u++;
-      else if (k === 'left' || k === 'back') f.zone = hasMediaPanel() ? 'media' : (tvInputs.entries && tvInputs.entries.length ? 'inputs' : 'apps');
-      else if (k === 'ok') { S.lastUtil = f.u; utilAction(U[f.u]); return; }
+      f.u = clamp(f.u !== undefined ? f.u : (S.lastUtil !== undefined ? S.lastUtil : 0), 0, U.length - 1);
+      if (k === 'up') {
+        if (f.u > 0) {
+          f.u--;
+        } else {
+          // At top of util column (Art Mode): navigate up into HDMI inputs or Media
+          if (hasInputs) { f.zone = 'inputs'; f.input = 0; S.lastRightZone = 'inputs'; }
+          else if (hasMedia) { f.zone = 'media'; f.media = 0; S.lastRightZone = 'media'; }
+        }
+      }
+      else if (k === 'down') {
+        if (f.u < U.length - 1) f.u++;
+      }
+      else if (k === 'left' || k === 'back') {
+        f.zone = 'apps';
+      }
+      else if (k === 'ok') {
+        S.lastUtil = f.u;
+        utilAction(U[f.u]);
+        return;
+      }
       S.lastUtil = f.u;
       return;
     }
+
+    // Zone: 'apps'
     f.zone = 'apps';
-    if (k === 'up' && i > 0) setSel(h[i - 1]);
+    if (k === 'up' && i > 0) {
+      setSel(h[i - 1]);
+    }
+    else if (k === 'down' && i < h.length - 1) {
+      setSel(h[i + 1]);
+    }
     else if (k === 'right') {
-      if (tvInputs.entries && tvInputs.entries.length) {
-        f.zone = 'inputs';
-        f.input = clamp(f.input || 0, 0, tvInputs.entries.length - 1);
+      // Spatial selection of right column zone:
+      // Lower apps list connects directly to Utilities (Settings at bottom); upper connects to Media / HDMI inputs
+      var isLower = i >= Math.max(1, Math.floor(h.length * 0.5));
+      if (isLower) {
+        f.zone = 'util';
+        if (i >= h.length - 2) {
+          f.u = U.length - 1; // Direct jump to Settings
+        } else {
+          f.u = clamp(S.lastUtil !== undefined ? S.lastUtil : 0, 0, U.length - 1);
+        }
+        S.lastRightZone = 'util';
       } else {
-        f.zone = hasMediaPanel() ? 'media' : 'util';
-        f.u = clamp(S.lastUtil, 0, U.length - 1);
+        if (hasMedia) {
+          f.zone = 'media';
+          f.media = 0;
+          S.lastRightZone = 'media';
+        } else if (hasInputs) {
+          f.zone = 'inputs';
+          f.input = 0;
+          S.lastRightZone = 'inputs';
+        } else {
+          f.zone = 'util';
+          f.u = 0;
+          S.lastRightZone = 'util';
+        }
       }
     }
-    else if (k === 'down' && i < h.length - 1) setSel(h[i + 1]);
-    else if (k === 'back') openMessage('leave');
-    else if (k === 'ok') { if (h.length) launch(S.sel); else addAppsRoute(); }
+    else if (k === 'back') {
+      openMessage('leave');
+    }
+    else if (k === 'ok') {
+      if (h.length) launch(S.sel);
+      else addAppsRoute();
+    }
   }
 
   /* ---------- Wallpaper child: focus previews, activation applies ---------- */
@@ -1337,7 +1414,7 @@
       var ids = settingsIds(), i = Math.max(0, ids.indexOf(t.f.id));
       if (k === 'up' && i > 0) i--;
       else if (k === 'down' && i < ids.length - 1) i++;
-      else if (k === 'back') { pop(); return; }
+      else if (k === 'back' || k === 'left') { pop(); return; }
       t.f.id = ids[i]; S.settingsFocus = ids[i];
       if (k === 'ok') settingsOk(ids[i]);
     },
@@ -1559,7 +1636,8 @@
     if (ensureIconPackImages()) return;
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    var nextStageClass = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies() ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    if (stage.className !== nextStageClass) stage.className = nextStageClass;
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1603,13 +1681,15 @@
     if (!inputsShelf) return;
     var list = tvInputs.entries || [];
     if (!list.length) {
-      inputsShelf.hidden = true;
-      setHTML(inputsShelf, '');
+      if (!inputsShelf.hidden) { inputsShelf.hidden = true; setHTML(inputsShelf, ''); }
       return;
     }
     inputsShelf.hidden = false;
     var isInputZone = top().id === 'home' && hs.zone === 'inputs';
     var focusedIndex = isInputZone ? clamp(hs.input, 0, list.length - 1) : -1;
+    var shelfKey = focusedIndex + '|' + list.length + '|' + (isInputZone ? 1 : 0);
+    if (inputsShelf._shelfKey === shelfKey) return;
+    inputsShelf._shelfKey = shelfKey;
     var html = list.map(function (entry, idx) {
       var isFocus = idx === focusedIndex;
       var connCls = entry.connected ? ' is-connected' : ' is-disconnected';
@@ -1638,12 +1718,17 @@
   }
   function renderNowPlaying(hs) {
     var visible = S.c.mediaBar !== 'hidden' && (!mediaState.access || mediaState.available);
-    var focus = top().id === 'home' && hs.zone === 'media' ? hs.media : -1;
+    var inMediaZone = top().id === 'home' && hs.zone === 'media';
+    var focus = inMediaZone ? hs.media : -1;
     var isCompact = S.c.mediaBar === 'compact';
     nowPlayingEl.hidden = !visible;
-    if (!visible) { setHTML(nowPlayingEl, ''); return; }
-    nowPlayingEl.className = 'now-playing' + (isCompact ? ' is-compact' : '');
+    if (!visible) { setHTML(nowPlayingEl, ''); nowPlayingEl._npKey = ''; return; }
+    var npCls = 'now-playing' + (isCompact ? ' is-compact' : '');
+    if (nowPlayingEl.className !== npCls) nowPlayingEl.className = npCls;
     if (!mediaState.access) {
+      var noAccessKey = 'no-access|' + focus + '|' + isCompact;
+      if (nowPlayingEl._npKey === noAccessKey) return;
+      nowPlayingEl._npKey = noAccessKey;
       if (isCompact) {
         setHTML(nowPlayingEl, '<div class="np-pill-body" data-z="media" data-i="1" data-action="media.expand" role="button" aria-label="Enable media controls, click to expand">'
           + '<div class="np-compact-art np-compact-art-fallback"><span>&#9835;</span></div>'
@@ -1666,6 +1751,9 @@
     var duration = mediaState.duration, progress = duration > 0 ? clamp(position / duration * 100, 0, 100) : 0;
     var playLabel = mediaState.playing ? 'Pause' : 'Play';
     var playGlyph = mediaState.playing ? '&#10074;&#10074;' : '&#9654;';
+    var mediaKey = 'media|' + focus + '|' + isCompact + '|' + mediaState.playing + '|' + mediaState.title + '|' + mediaState.artist + '|' + mediaState.artwork + '|' + (mediaState.playing ? Math.floor(position / 1000) : 0);
+    if (nowPlayingEl._npKey === mediaKey) return;
+    nowPlayingEl._npKey = mediaKey;
 
     if (isCompact) {
       var compactArt = mediaState.artwork
@@ -1719,9 +1807,14 @@
     return '<button type="button" tabindex="-1" class="u' + (extra || '') + '" data-z="' + z + '" data-i="' + i + '" data-action="' + action + '" aria-label="' + esc(name) + '"><span class="u-content">' + inner + '</span></button>';
   }
   function renderUtils(hs) {
-    var html = '', style = hs.mode === 'arrange' && S.c.controls !== 'text' ? 'both' : S.c.controls;
+    var style = hs.mode === 'arrange' && S.c.controls !== 'text' ? 'both' : S.c.controls;
+    var uState = (hs.zone === 'util' || hs.zone === 'ctl') ? ('awake|' + hs.zone + '|' + hs.u) : 'idle';
+    var uKey = style + '|' + uState + '|' + S.c.layout;
+    if (utilsEl._uKey === uKey) return;
+    utilsEl._uKey = uKey;
     var iconsOnly = style === 'icons', U = utils(), focused = null;
     utilsEl.className = 'utils quiet-utils is-' + style + (hs.zone === 'util' || hs.zone === 'ctl' ? ' is-awake' : '');
+    var html = '';
     U.forEach(function (u, i) { html += utilBtn('util', i, 'util.' + u, icon(UTIL[u][1], '', true) + '<span class="u-label">' + UTIL[u][0] + '</span>', '', UTIL[u][0]); });
     setHTML(utilsEl, html);
     Array.prototype.forEach.call(utilsEl.querySelectorAll('.u'), function (b) {
@@ -1781,9 +1874,17 @@
   }
   function renderAppFocusName(hs) {
     var it = hs.items[hs.i], width, x, y, placement;
-    if (S.c.apps !== 'icons' || hs.mode !== 'browse' || hs.zone !== 'apps' || !it) { appFocusName.className = 'app-focus-name'; return; }
-    appFocusName.textContent = app(it.id).name;
-    width = Math.min(S.c.layout === 'list' ? 1056 : 1640, Math.ceil(textWidth(app(it.id).name, S.c.layout === 'list' ? 40 : 36, 500, -.6, 'primary') + 8));
+    if (S.c.apps !== 'icons' || hs.mode !== 'browse' || hs.zone !== 'apps' || !it) {
+      if (appFocusName.className !== 'app-focus-name') appFocusName.className = 'app-focus-name';
+      appFocusName._afnKey = '';
+      return;
+    }
+    var afnKey = it.id + '|' + dockAnchorCenter + '|' + S.c.layout;
+    if (appFocusName._afnKey === afnKey) return;
+    appFocusName._afnKey = afnKey;
+    var appName = app(it.id).name;
+    appFocusName.textContent = appName;
+    width = Math.min(S.c.layout === 'list' ? 1056 : 1640, Math.ceil(textWidth(appName, S.c.layout === 'list' ? 40 : 36, 500, -.6, 'primary') + 8));
     appFocusName.style.width = width + 'px';
     if (S.c.layout === 'list') {
       x = 280; placement = phFields[photoPlateIndex]._placement;
@@ -1839,42 +1940,67 @@
     var tileFocus = hs.zone === 'apps' || hs.zone === 'tiles', tileSel = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview';
     var focusItem = items[anchor], s, ax, label, width;
 
-    dock.className = 'dock' + (empty ? ' is-empty' : '');
-    dock.style.left = g.x + 'px'; dock.style.top = g.y + 'px'; dock.style.width = g.w + 'px'; dock.style.height = g.h + 'px';
-    dock.style.setProperty('--tile-w', g.tw + 'px'); dock.style.setProperty('--tile-h', g.th + 'px'); dock.style.setProperty('--dock-h', g.h + 'px');
-    dock.style.setProperty('--content-tile-w', g.tw + 'px'); dock.style.setProperty('--content-tile-h', g.baseTh + 'px');
-    dock.style.setProperty('--dock-scale', g.scale);
-    dock.style.setProperty('--nudge-top', ((g.th - 48) / 2) + 'px');
+    var dockCls = 'dock' + (empty ? ' is-empty' : '');
+    if (dock.className !== dockCls) dock.className = dockCls;
+    var geomKey = g.x + '|' + g.y + '|' + g.w + '|' + g.h + '|' + g.tw + '|' + g.th + '|' + g.scale + '|' + g.shelf + '|' + empty;
+    if (dock._geomKey !== geomKey) {
+      dock._geomKey = geomKey;
+      dock.style.left = g.x + 'px'; dock.style.top = g.y + 'px'; dock.style.width = g.w + 'px'; dock.style.height = g.h + 'px';
+      dock.style.setProperty('--tile-w', g.tw + 'px'); dock.style.setProperty('--tile-h', g.th + 'px'); dock.style.setProperty('--dock-h', g.h + 'px');
+      dock.style.setProperty('--content-tile-w', g.tw + 'px'); dock.style.setProperty('--content-tile-h', g.baseTh + 'px');
+      dock.style.setProperty('--dock-scale', g.scale);
+      dock.style.setProperty('--nudge-top', ((g.th - 48) / 2) + 'px');
+      IMG.mat.style.left = (-g.x) + 'px'; IMG.mat.style.top = (-g.y) + 'px';
+      IMG.mat.style.transformOrigin = '960px ' + (g.y + g.h / 2) + 'px';
+      matScrim.style.left = (-g.x) + 'px'; matScrim.style.top = (SCRIM_Y - g.y) + 'px';
+      matScrim.style.transformOrigin = '960px ' + (g.y + g.h / 2 - SCRIM_Y) + 'px';
+      shelf.style.width = g.shelf + 'px';
+    }
     dockAnchorCenter = g.x + 16 + anchor * g.pitch - off + g.tw / 2;
-    IMG.mat.style.left = (-g.x) + 'px'; IMG.mat.style.top = (-g.y) + 'px';
-    IMG.mat.style.transformOrigin = '960px ' + (g.y + g.h / 2) + 'px';
-    matScrim.style.left = (-g.x) + 'px'; matScrim.style.top = (SCRIM_Y - g.y) + 'px';
-    matScrim.style.transformOrigin = '960px ' + (g.y + g.h / 2 - SCRIM_Y) + 'px';
-    shelf.style.width = g.shelf + 'px';
-    shelf.className = 'shelf' + (g.broad && off > 0 ? ' fade-l' : '') + (g.broad && off + g.shelf < n * g.pitch - 8 ? ' fade-r' : '');
+    var shelfCls = 'shelf' + (g.broad && off > 0 ? ' fade-l' : '') + (g.broad && off + g.shelf < n * g.pitch - 8 ? ' fade-r' : '');
+    if (shelf.className !== shelfCls) shelf.className = shelfCls;
 
     keyed(track, empty ? [] : items, function (el, it, i) {
       var a = it.id ? app(it.id) : null, left = i * g.pitch, focus = tileFocus && i === anchor, sel = tileSel && i === anchor;
       var lifted = hs.lifted && i === anchor, partial = g.broad && (left - off < -1 || left + g.tw - off > g.shelf + 1);
       var outside = g.broad && (left - off + g.tw <= 0 || left - off >= g.shelf);
       setContent(el, it.kind + '|' + (it.id || '') + '|' + (it.id ? dockLabelSize(it.id) : full) + '|' + S.c.bg + '|' + S.c.apps + '|' + homeFont() + '|' + S.c.iconPack, '<span class="tile-content">' + dockTileHtml(it, full) + '</span>');
-      el.className = 'tile k-' + it.kind + (focus ? ' is-focus' : '') + (sel ? ' is-sel' : '') + (lifted ? ' is-lifted' : '') + (partial ? ' is-partial' : '') + (outside ? ' is-outside-icon' : '')
+      var tileCls = 'tile k-' + it.kind + (focus ? ' is-focus' : '') + (sel ? ' is-sel' : '') + (lifted ? ' is-lifted' : '') + (partial ? ' is-partial' : '') + (outside ? ' is-outside-icon' : '')
         + (a && !a.mark ? ' is-text' : '') + (it.kind === 'add' && full ? ' is-full' : '') + (it.kind === 'app' && S.press === it.id ? ' is-press' : '')
         + (lifted && i === 0 ? ' no-l' : '') + (lifted && i >= ns - 1 ? ' no-r' : '');
-      el.style.transform = 'translate3d(' + left + 'px,0,0)';
-      el.setAttribute('role', 'button');
-      if (a) el.setAttribute('aria-label', a.name);
-      if (hs.mode === 'arrange') attrs(el, 'tile', i, 'arrange.' + (it.kind === 'add' ? 'add' : (it.kind === 'ph' ? 'placeholder.' : 'tile.') + it.id));
-      else attrs(el, 'app', i, 'home.app.' + it.id);
+      if (el.className !== tileCls) el.className = tileCls;
+      if (el._left !== left) { el._left = left; el.style.transform = 'translate3d(' + left + 'px,0,0)'; }
+      if (!el._initRole) {
+        el._initRole = true;
+        el.setAttribute('role', 'button');
+        if (a) el.setAttribute('aria-label', a.name);
+      }
+      var actSig = hs.mode + '|' + i + '|' + it.kind + '|' + (it.id || '');
+      if (el._actSig !== actSig) {
+        el._actSig = actSig;
+        if (hs.mode === 'arrange') attrs(el, 'tile', i, 'arrange.' + (it.kind === 'add' ? 'add' : (it.kind === 'ph' ? 'placeholder.' : 'tile.') + it.id));
+        else attrs(el, 'app', i, 'home.app.' + it.id);
+      }
     });
-    track.style.transform = 'translate3d(' + (-off) + 'px,0,0)';
-    plate.className = 'plate' + (!n || empty || hs.zone === null ? '' : hs.lifted ? ' on-lift' : tileFocus ? ' on-focus' : tileSel ? ' on-sel' : '');
-    plate.style.transform = 'translate3d(' + (anchor * g.pitch) + 'px,0,0)';
 
-    cueL.style.left = (g.x - 72) + 'px'; cueR.style.left = (g.x + g.w + 24) + 'px';
-    cueL.style.top = cueR.style.top = (g.y + g.h / 2 - 24) + 'px';
-    cueL.className = 'cue' + (!g.broad && !empty && scroll.first > 0 ? ' is-on' : '');
-    cueR.className = 'cue' + (!g.broad && !empty && scroll.first + g.vis < n ? ' is-on' : '');
+    var trackTr = 'translate3d(' + (-off) + 'px,0,0)';
+    if (track._tr !== trackTr) { track._tr = trackTr; track.style.transform = trackTr; }
+
+    var plateCls = 'plate' + (!n || empty || hs.zone === null ? '' : hs.lifted ? ' on-lift' : tileFocus ? ' on-focus' : tileSel ? ' on-sel' : '');
+    if (plate.className !== plateCls) plate.className = plateCls;
+
+    var plateTr = 'translate3d(' + (anchor * g.pitch) + 'px,0,0)';
+    if (plate._tr !== plateTr) { plate._tr = plateTr; plate.style.transform = plateTr; }
+
+    if (cueL._gx !== g.x || cueL._gy !== g.y || cueL._gw !== g.w || cueL._gh !== g.h) {
+      cueL._gx = g.x; cueL._gy = g.y; cueL._gw = g.w; cueL._gh = g.h;
+      cueL.style.left = (g.x - 72) + 'px'; cueR.style.left = (g.x + g.w + 24) + 'px';
+      cueL.style.top = cueR.style.top = (g.y + g.h / 2 - 24) + 'px';
+    }
+    var cueLCls = 'cue' + (!g.broad && !empty && scroll.first > 0 ? ' is-on' : '');
+    if (cueL.className !== cueLCls) cueL.className = cueLCls;
+    var cueRCls = 'cue' + (!g.broad && !empty && scroll.first + g.vis < n ? ' is-on' : '');
+    if (cueR.className !== cueRCls) cueR.className = cueRCls;
 
     ax = g.x + 16 + anchor * g.pitch - off;
     if (hs.mode === 'arrange' && !hs.lifted && (hs.zone === 'tiles' || hs.zone === 'act') && focusItem && focusItem.kind !== 'add') {
@@ -1887,8 +2013,10 @@
       dockAction.style.transform = 'translate3d(' + ax + 'px,0,0)';
       attrs(dockAction, 'act', anchor, 'arrange.' + (s.removed ? 'restore.' : 'remove.') + s.id);
     } else {
-      dockAction.className = 'dock-action';
-      dockAction.removeAttribute('data-z'); dockAction.removeAttribute('data-action');
+      if (dockAction.className !== 'dock-action') {
+        dockAction.className = 'dock-action';
+        dockAction.removeAttribute('data-z'); dockAction.removeAttribute('data-action');
+      }
     }
     setHTML(dockEmpty, empty ? '<p>No apps on Home</p><button type="button" tabindex="-1" class="btn' + (hs.zone === 'empty' ? ' is-focus' : '') + '" data-z="empty" data-i="0" data-action="home.add-apps">' + icon('plus') + '<span>Add apps</span></button>' : '');
   }
@@ -1939,7 +2067,7 @@
     var pitch = compact ? PH_COMPACT_PITCH : Math.round(PH_PITCH * scale);
     var plateHeight = compact ? 88 : Math.round(134 * scale);
     var anchor = clamp(hs.i, 0, Math.max(0, n - 1)), first, off, width, slot, y, s, label, aw, plateState;
-    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview';
+    var rowFocus = hs.zone === 'apps' || hs.zone === 'tiles', remembered = (hs.mode === 'arrange' && (hs.zone === 'act' || hs.zone === 'ctl')) || hs.zone === 'preview' || (top().id === 'home' && hs.zone !== 'apps' && hs.zone !== 'tiles');
     photoModeTransition(compact);
     if (compact) {
       first = clamp(scroll.photoArrange, anchor - 7, anchor - 1);
@@ -2134,16 +2262,28 @@
   /* Keep the retry or membership state on the focused control. The stage-level line
      shares its position without changing the control's identity or key behaviour. */
   function renderFocusStatus(t) {
-    if (t.id === 'art' || isSettingsDetail(t)) { focusStatus.className = 'focus-status'; return; }
-    var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, text = S.err ? 'Not saved. OK tries again.' : '', i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
-    Array.prototype.forEach.call(stage.querySelectorAll('.has-local-status'), function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
-    for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
+    if (t.id === 'art' || isSettingsDetail(t)) {
+      if (focusStatus.className !== 'focus-status') focusStatus.className = 'focus-status';
+      return;
+    }
+    var text = S.err ? 'Not saved. OK tries again.' : '';
     if (!text && t.id === 'arrange' && (t.f.zone === 'act' || t.f.zone === 'tiles')) {
       var slot = t.slots[t.f.i];
       if (slot && !slot.removed && t.f.zone === 'act' && S.c.home.length === 1) text = LAST;
     }
     if (!text && S.note === LAST && t.id === 'arrange') text = LAST;
-    if (!target || !text) { focusStatus.className = 'focus-status'; return; }
+    if (!text) {
+      if (focusStatus.className !== 'focus-status') focusStatus.className = 'focus-status';
+      var locals = stage.querySelectorAll('.has-local-status');
+      if (locals.length) {
+        Array.prototype.forEach.call(locals, function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
+      }
+      return;
+    }
+    var root = isSettingsDetail(top()) ? appearanceEl : sheetEl.hidden ? homeEl : sheetEl, active = root.querySelectorAll('.is-focus[data-action]'), target = null, i, r, sr, scale, x, y, w, action, solid, photoRow = false, photoFree = false;
+    Array.prototype.forEach.call(stage.querySelectorAll('.has-local-status'), function (el) { el.className = el.className.replace(/\s+has-local-status/g, ''); });
+    for (i = 0; i < active.length; i++) if (renderedAction(active[i])) { target = active[i]; break; }
+    if (!target) { if (focusStatus.className !== 'focus-status') focusStatus.className = 'focus-status'; return; }
     if (target.parentNode === utilsEl && utilsEl.className.indexOf('is-icons') >= 0) { renderUtilFocusLabel(target); focusStatus.className = 'focus-status'; return; }
     // Photo action pills stay on one line; the header already carries this status.
     if (S.c.layout === 'list' && t.id === 'arrange' && !t.lifted && (t.f.zone === 'act' || t.f.zone === 'tiles')) { focusStatus.className = 'focus-status'; return; }
@@ -2547,6 +2687,18 @@
     });
   }
   var heldKeys = {};
+  window.onTvKeyDown = function (code) {
+    var k = KEYS[code];
+    if (!k) return;
+    if (k === 'ok' || k === 'back') {
+      if (heldKeys[code]) return;
+      heldKeys[code] = true;
+    }
+    press(k);
+  };
+  window.onTvKeyUp = function (code) {
+    delete heldKeys[code];
+  };
   document.addEventListener('keydown', function (ev) {
     var code = ev.keyCode, k = KEYS[code];
     if (code === 9) { ev.preventDefault(); return; }
