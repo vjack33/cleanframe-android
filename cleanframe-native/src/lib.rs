@@ -105,26 +105,30 @@ pub struct AppState {
     pub now_playing_title: String,
     pub now_playing_artist: String,
     pub now_playing_playing: bool,
-    pub frost_cache: std::cell::RefCell<std::collections::HashMap<usize, slint::Image>>,
+    pub frost_cache: std::cell::RefCell<std::collections::HashMap<usize, (slint::Image, slint::Image)>>,
 }
 
 impl AppState {
-    pub fn get_frost_image(&self, idx: usize) -> slint::Image {
+    pub fn get_frost_images(&self, idx: usize) -> (slint::Image, slint::Image) {
         let mut cache = self.frost_cache.borrow_mut();
-        if let Some(img) = cache.get(&idx) {
-            return img.clone();
+        if let Some(pair) = cache.get(&idx) {
+            return pair.clone();
         }
         let bytes = if idx < WALLPAPER_THUMBS.len() {
             WALLPAPER_THUMBS[idx]
         } else {
             WALLPAPER_THUMBS[0]
         };
-        if let Some(img) = blur::blur_wallpaper_bytes(bytes) {
-            cache.insert(idx, img.clone());
-            img
+        if let Some(pair) = blur::blur_wallpaper_bytes_pair(bytes) {
+            cache.insert(idx, pair.clone());
+            pair
         } else {
-            slint::Image::default()
+            (slint::Image::default(), slint::Image::default())
         }
+    }
+
+    pub fn get_frost_image(&self, idx: usize) -> slint::Image {
+        self.get_frost_images(idx).0
     }
 }
 
@@ -659,7 +663,9 @@ fn android_main(app: slint::android::AndroidApp) {
     main_window.set_focused_caption("Prime Video".into());
     main_window.set_selected_app(3);
     main_window.set_wallpaper_idx(6);
-    main_window.set_dynamic_frost_image(state.borrow().get_frost_image(6));
+    let (clean_frost, dock_frost) = state.borrow().get_frost_images(6);
+    main_window.set_dynamic_frost_image(clean_frost);
+    main_window.set_dock_frost_image(dock_frost);
     main_window.set_current_layout("Dock".into());
     main_window.set_now_playing_visible(false);
 
@@ -1093,7 +1099,9 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_settings_open(s.settings_open);
     win.set_settings_detail(s.settings_detail);
     win.set_wallpaper_idx(s.wallpaper_idx as i32);
-    win.set_dynamic_frost_image(s.get_frost_image(s.wallpaper_idx));
+    let (clean_frost, dock_frost) = s.get_frost_images(s.wallpaper_idx);
+    win.set_dynamic_frost_image(clean_frost);
+    win.set_dock_frost_image(dock_frost);
     win.set_current_layout(s.layout_mode.into());
     win.set_current_font(s.typography.into());
     win.set_current_material(s.material.into());

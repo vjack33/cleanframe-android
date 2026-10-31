@@ -71,6 +71,17 @@ component LiquidGlassPanel inherits Rectangle {
             border-color: root.rim_color;
         }
 
+        // Inner Fresnel chromatic perimeter highlight (Liquid Glass Studio)
+        Rectangle {
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            height: parent.height - 2px;
+            border-radius: max(0px, root.border-radius - 1px);
+            border-width: 1px;
+            border-color: @linear-gradient(135deg, rgba(224, 242, 254, 0.38) 0%, rgba(255, 255, 255, 0.14) 30%, rgba(255, 255, 255, 0.0) 65%, rgba(251, 207, 232, 0.20) 100%);
+        }
+
         // Top Specular Hairline (Overhead light catch)
         if root.show_specular_hairline: Rectangle {
             x: 20px;
@@ -116,6 +127,7 @@ export component MainWindow inherits Window {
     in property <string> current_focus_style: "Glass, Soft"; // "Glass, Soft" | "Minimal Pill"
     in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
     in property <image> dynamic_frost_image;
+    in property <image> dock_frost_image;
 
     // Primary Home Apps (8 Apps)
     in property <[AppItem]> apps: [
@@ -344,7 +356,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 26px;
-                frost_image: root.dynamic_frost_image;
+                frost_image: root.dock_frost_image;
                 origin_x: (root.width - 752px) / 2;
                 origin_y: 338px;
                 glass_tint: (root.current_material == "Clear tint") ?

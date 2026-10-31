@@ -258,26 +258,190 @@ pub fn boost_saturation(pixels: &mut [u8], factor: f32) {
     }
 }
 
-/// Downscales, blurs, and boosts saturation of any RGBA image on the fly, returning a Slint Image.
-pub fn blur_rgba_image(
-    img: &image::RgbaImage,
-    target_width: u32,
-    target_height: u32,
-    radius: usize,
-    saturation: f32,
-) -> Image {
-    let resized = image::imageops::resize(
-        img,
-        target_width,
-        target_height,
-        image::imageops::FilterType::Triangle,
-    );
-    let mut pixels = resized.into_raw();
-    stack_blur_rgba(&mut pixels, target_width as usize, target_height as usize, radius);
-    if saturation > 1.0 {
-        boost_saturation(&mut pixels, saturation);
+/// Bilinear sampling of a single color channel from an RGBA buffer.
+#[inline(always)]
+fn sample_bilinear(pixels: &[u8], width: usize, height: usize, x: f32, y: f32, c: usize) -> f32 {
+    let x = x.clamp(0.0, (width - 1) as f32);
+    let y = y.clamp(0.0, (height - 1) as f32);
+    let x0 = x.floor() as usize;
+    let y0 = y.floor() as usize;
+    let x1 = (x0 + 1).min(width - 1);
+    let y1 = (y0 + 1).min(height - 1);
+    let fx = x - x0 as f32;
+    let fy = y - y0 as f32;
+
+    let p00 = pixels[(y0 * width + x0) * 4 + c] as f32;
+    let p10 = pixels[(y0 * width + x1) * 4 + c] as f32;
+    let p01 = pixels[(y1 * width + x0) * 4 + c] as f32;
+    let p11 = pixels[(y1 * width + x1) * 4 + c] as f32;
+
+    let top = p00 * (1.0 - fx) + p10 * fx;
+    let bot = p01 * (1.0 - fx) + p11 * fx;
+    top * (1.0 - fy) + bot * fy
+}
+
+/// Signed distance and outward normal for the Dock rounded rectangle in 320x180 buffer space.
+/// Returns (signed_distance, normal_x, normal_y).
+/// Inside the dock, signed_distance < 0.0.
+#[inline]
+fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
+    // 960x540 screen geometry scaled 1/3:
+    // x: 104 / 3 = 34.6667, y: 338 / 3 = 112.6667
+    // width: 752 / 3 = 250.6667, height: 116 / 3 = 38.6667
+    // radius: 26 / 3 = 8.6667
+    const CX: f32 = 160.0;
+    const CY: f32 = 132.0;
+    const HW: f32 = 125.3333;
+    const HH: f32 = 19.3333;
+    const CR: f32 = 8.6667;
+
+    let dx = x - CX;
+    let dy = y - CY;
+    let ax = dx.abs();
+    let ay = dy.abs();
+    let sx = if dx >= 0.0 { 1.0 } else { -1.0 };
+    let sy = if dy >= 0.0 { 1.0 } else { -1.0 };
+
+    if ax > (HW - CR) && ay > (HH - CR) {
+        // Corner quadrant
+        let qx = ax - (HW - CR);
+        let qy = ay - (HH - CR);
+        let dist_corner = (qx * qx + qy * qy).sqrt();
+        let sd = dist_corner - CR;
+        let (nx, ny) = if dist_corner > 1e-4 {
+            (sx * (qx / dist_corner), sy * (qy / dist_corner))
+        } else {
+            (sx * 0.7071068, sy * 0.7071068)
+        };
+        (sd, nx, ny)
+    } else {
+        // Straight edge / interior
+        let dist_edge_x = ax - HW;
+        let dist_edge_y = ay - HH;
+        if dist_edge_x <= 0.0 && dist_edge_y <= 0.0 {
+            // Inside the box
+            let sd = dist_edge_x.max(dist_edge_y);
+            if dist_edge_x > dist_edge_y {
+                (sd, sx, 0.0)
+            } else {
+                (sd, 0.0, sy)
+            }
+        } else {
+            // Outside the box
+            let ex = dist_edge_x.max(0.0);
+            let ey = dist_edge_y.max(0.0);
+            let sd = (ex * ex + ey * ey).sqrt();
+            let len = ex.hypot(ey);
+            if len > 1e-4 {
+                (sd, sx * (ex / len), sy * (ey / len))
+            } else {
+                (sd, sx, 0.0)
+            }
+        }
     }
-    let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(target_width, target_height);
+}
+
+/// Applies physical lens refraction (Snell's Law), chromatic dispersion (prism fringing),
+/// Schlick Fresnel edge reflectance, and directional specular glare to the Dock glass bevel.
+/// Modeled after the optical physics in https://github.com/iyinchao/liquid-glass-studio.
+pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize) {
+    let src = pixels.to_vec();
+
+    // Refraction bevel thickness in buffer pixels (~21px on 960x540 screen)
+    const REF_THICKNESS: f32 = 7.0;
+    // Base refraction ray displacement in buffer pixels
+    const REF_DISTANCE: f32 = 5.5;
+    // Chromatic dispersion factor (wavelength split between red and blue)
+    const DISPERSION: f32 = 0.04;
+    // Glass refractive index (crown glass)
+    const N_GLASS: f32 = 1.50;
+
+    // Bounding box of the Dock in buffer space:
+    let min_x = 32.max(0);
+    let max_x = 288.min(width - 1);
+    let min_y = 110.max(0);
+    let max_y = 154.min(height - 1);
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let (sd, nx, ny) = dock_sdf_and_normal(x as f32 + 0.5, y as f32 + 0.5);
+
+            // Only process pixels inside the dock bevel: 0 < -sd < REF_THICKNESS
+            if sd >= 0.0 || sd <= -REF_THICKNESS {
+                continue;
+            }
+
+            let dist_to_edge = -sd; // Distance inward from perimeter (0.0 to REF_THICKNESS)
+            let x_ratio = 1.0 - (dist_to_edge / REF_THICKNESS); // 1.0 at outer rim, 0.0 at flat interior
+
+            // Snell's Law refraction curve from liquid-glass-studio:
+            // theta_i = asin(x_ratio^2)
+            // theta_t = asin(sin(theta_i) / n)
+            // edge_factor = tan(theta_i - theta_t)
+            let x2 = (x_ratio * x_ratio).clamp(0.0, 0.9999);
+            let theta_i = x2.asin();
+            let sin_theta_t = (theta_i.sin() / N_GLASS).clamp(-1.0, 1.0);
+            let theta_t = sin_theta_t.asin();
+            let edge_factor = (theta_i - theta_t).tan().max(0.0);
+
+            // Deflection vector pointing inward (into the glass slab)
+            let base_disp = edge_factor * REF_DISTANCE;
+            let offset_x = -nx * base_disp;
+            let offset_y = -ny * base_disp;
+
+            // Chromatic dispersion: Red deflects less, Blue deflects more
+            let cur_x = x as f32 + 0.5;
+            let cur_y = y as f32 + 0.5;
+
+            let red = sample_bilinear(
+                &src,
+                width,
+                height,
+                cur_x + offset_x * (1.0 - DISPERSION),
+                cur_y + offset_y * (1.0 - DISPERSION),
+                0,
+            );
+            let green = sample_bilinear(
+                &src,
+                width,
+                height,
+                cur_x + offset_x,
+                cur_y + offset_y,
+                1,
+            );
+            let blue = sample_bilinear(
+                &src,
+                width,
+                height,
+                cur_x + offset_x * (1.0 + DISPERSION),
+                cur_y + offset_y * (1.0 + DISPERSION),
+                2,
+            );
+
+            // Schlick Fresnel edge reflectance: concentrates luminous glow right at the outer rim
+            let fresnel = x_ratio.powi(5);
+
+            // Overhead key light specular catch (angle ~ -45 deg, light from top-left)
+            // Outward normal dot light vector (0.35, -0.93)
+            let glare_cos = (-nx * 0.35 + -ny * (-0.93)).max(0.0);
+            let glare = glare_cos.powi(3) * x_ratio.powi(3);
+
+            let highlight_boost = (fresnel * 0.28 + glare * 0.32).clamp(0.0, 1.0);
+
+            let r_out = (red * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
+            let g_out = (green * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
+            let b_out = (blue * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
+
+            let idx = (y * width + x) * 4;
+            pixels[idx] = r_out;
+            pixels[idx + 1] = g_out;
+            pixels[idx + 2] = b_out;
+        }
+    }
+}
+
+fn pixels_to_image(pixels: &[u8], width: u32, height: u32) -> Image {
+    let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width, height);
     let slice = buffer.make_mut_slice();
     for (i, chunk) in pixels.chunks_exact(4).enumerate() {
         slice[i] = Rgba8Pixel {
@@ -290,8 +454,61 @@ pub fn blur_rgba_image(
     Image::from_rgba8(buffer)
 }
 
+/// Downscales, blurs, and boosts saturation of any RGBA image on the fly,
+/// returning both the clean blurred image (for general panels/settings)
+/// and the optically refracted & chromatic-dispersed image (for the Dock).
+pub fn blur_rgba_image_pair(
+    img: &image::RgbaImage,
+    target_width: u32,
+    target_height: u32,
+    radius: usize,
+    saturation: f32,
+) -> (Image, Image) {
+    let resized = image::imageops::resize(
+        img,
+        target_width,
+        target_height,
+        image::imageops::FilterType::Triangle,
+    );
+    let mut pixels = resized.into_raw();
+    stack_blur_rgba(&mut pixels, target_width as usize, target_height as usize, radius);
+    if saturation > 1.0 {
+        boost_saturation(&mut pixels, saturation);
+    }
+
+    // 1. Clean frost for general panels and settings modal
+    let clean_img = pixels_to_image(&pixels, target_width, target_height);
+
+    // 2. Optically refracted and chromatic-dispersed frost for the Dock
+    let mut dock_pixels = pixels;
+    apply_glass_refraction_dispersion(&mut dock_pixels, target_width as usize, target_height as usize);
+    let dock_img = pixels_to_image(&dock_pixels, target_width, target_height);
+
+    (clean_img, dock_img)
+}
+
+/// Downscales, blurs, and boosts saturation of any RGBA image on the fly, returning a Slint Image.
+pub fn blur_rgba_image(
+    img: &image::RgbaImage,
+    target_width: u32,
+    target_height: u32,
+    radius: usize,
+    saturation: f32,
+) -> Image {
+    let (clean, _) = blur_rgba_image_pair(img, target_width, target_height, radius, saturation);
+    clean
+}
+
+/// Decodes any wallpaper bytes (JPEG/PNG), computes optical blur on the fly,
+/// returning (clean_frost, dock_refracted_frost).
+pub fn blur_wallpaper_bytes_pair(bytes: &[u8]) -> Option<(Image, Image)> {
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    Some(blur_rgba_image_pair(&img, 320, 180, 20, 1.35))
+}
+
 /// Decodes any wallpaper bytes (JPEG/PNG), computes optical blur on the fly, and returns a Slint Image.
 pub fn blur_wallpaper_bytes(bytes: &[u8]) -> Option<Image> {
-    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    Some(blur_rgba_image(&img, 320, 180, 20, 1.35))
+    let (clean, _) = blur_wallpaper_bytes_pair(bytes)?;
+    Some(clean)
 }
+
