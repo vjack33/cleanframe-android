@@ -347,12 +347,12 @@ fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
 pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize) {
     let src = pixels.to_vec();
 
-    // Refraction bevel thickness in buffer pixels (~21px on 960x540 screen)
-    const REF_THICKNESS: f32 = 7.0;
+    // Refraction bevel thickness in buffer pixels (~24px on 960x540 screen)
+    const REF_THICKNESS: f32 = 8.0;
     // Base refraction ray displacement in buffer pixels
-    const REF_DISTANCE: f32 = 5.5;
+    const REF_DISTANCE: f32 = 6.5;
     // Chromatic dispersion factor (wavelength split between red and blue)
-    const DISPERSION: f32 = 0.04;
+    const DISPERSION: f32 = 0.05;
     // Glass refractive index (crown glass)
     const N_GLASS: f32 = 1.50;
 
@@ -418,19 +418,10 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
                 2,
             );
 
-            // Schlick Fresnel edge reflectance: concentrates luminous glow right at the outer rim
-            let fresnel = x_ratio.powi(5);
-
-            // Overhead key light specular catch (angle ~ -45 deg, light from top-left)
-            // Outward normal dot light vector (0.35, -0.93)
-            let glare_cos = (-nx * 0.35 + -ny * (-0.93)).max(0.0);
-            let glare = glare_cos.powi(3) * x_ratio.powi(3);
-
-            let highlight_boost = (fresnel * 0.28 + glare * 0.32).clamp(0.0, 1.0);
-
-            let r_out = (red * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
-            let g_out = (green * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
-            let b_out = (blue * (1.0 - highlight_boost) + 255.0 * highlight_boost).clamp(0.0, 255.0) as u8;
+            // Pure optical refraction without artificial painted white borders
+            let r_out = red.clamp(0.0, 255.0) as u8;
+            let g_out = green.clamp(0.0, 255.0) as u8;
+            let b_out = blue.clamp(0.0, 255.0) as u8;
 
             let idx = (y * width + x) * 4;
             pixels[idx] = r_out;

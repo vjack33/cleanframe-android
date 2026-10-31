@@ -33,16 +33,16 @@ component LiquidGlassPanel inherits Rectangle {
     in property <length> scene_height: 540px;
     in property <length> origin_x: 0px;
     in property <length> origin_y: 0px;
-    in property <brush> glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 32%, rgba(18, 24, 32, 0.28) 72%, rgba(12, 16, 22, 0.45) 100%);
-    in property <color> rim_color: rgba(255, 255, 255, 0.35);
-    in property <length> rim_width: 1.2px;
-    in property <bool> show_specular_hairline: true;
+    in property <brush> glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 32%, rgba(18, 24, 32, 0.22) 72%, rgba(12, 16, 22, 0.36) 100%);
+    in property <color> rim_color: rgba(0, 0, 0, 0);
+    in property <length> rim_width: 0px;
+    in property <bool> show_specular_hairline: false;
     in property <bool> show_left_rim: false;
 
-    // Drop shadow separating optical glass from wallpaper
-    drop-shadow-offset-y: 10px;
-    drop-shadow-blur: 24px;
-    drop-shadow-color: rgba(0, 0, 0, 0.38);
+    // Soft drop shadow separating optical glass from wallpaper
+    drop-shadow-offset-y: 12px;
+    drop-shadow-blur: 28px;
+    drop-shadow-color: rgba(0, 0, 0, 0.40);
 
     // Inner Clipped Optical Glass Substrate
     Rectangle {
@@ -61,52 +61,12 @@ component LiquidGlassPanel inherits Rectangle {
             source: root.frost_image;
         }
 
-        // Luminous Glass Body Tint & Perimeter Rim
+        // Pure Translucent Optical Glass Body Tint (No painted stroke borders; edge defined by Snell's refraction)
         Rectangle {
             width: 100%;
             height: 100%;
             border-radius: root.border-radius;
             background: root.glass_tint;
-            border-width: root.rim_width;
-            border-color: root.rim_color;
-        }
-
-        // Inner Fresnel chromatic perimeter highlight (Liquid Glass Studio)
-        Rectangle {
-            x: 1px;
-            y: 1px;
-            width: parent.width - 2px;
-            height: parent.height - 2px;
-            border-radius: max(0px, root.border-radius - 1px);
-            border-width: 1px;
-            border-color: @linear-gradient(135deg, rgba(224, 242, 254, 0.38) 0%, rgba(255, 255, 255, 0.14) 30%, rgba(255, 255, 255, 0.0) 65%, rgba(251, 207, 232, 0.20) 100%);
-        }
-
-        // Top Specular Hairline (Overhead light catch)
-        if root.show_specular_hairline: Rectangle {
-            x: 20px;
-            y: 1px;
-            width: parent.width - 40px;
-            height: 1.25px;
-            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.50) 20%, rgba(255, 255, 255, 0.88) 50%, rgba(255, 255, 255, 0.50) 80%, rgba(255, 255, 255, 0.0) 100%);
-        }
-
-        // Left Specular Rim (Directional light sweep)
-        if root.show_left_rim: Rectangle {
-            x: 1px;
-            y: 16px;
-            width: 1px;
-            height: parent.height - 32px;
-            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.08) 100%);
-        }
-
-        // Bottom subtle edge burn
-        Rectangle {
-            x: 32px;
-            y: parent.height - 2px;
-            width: parent.width - 64px;
-            height: 1px;
-            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.0) 100%);
         }
     }
 }
@@ -400,25 +360,14 @@ export component MainWindow inherits Window {
                             width: parent.width - 12px;
                             height: parent.height - 8px;
 
-                            // Plate Luminous Frosted Glass Body
+                            // Plate Luminous Frosted Glass Body (No borders)
                             Rectangle {
                                 width: 100%;
                                 height: 100%;
                                 border-radius: 18px;
                                 background: (root.current_focus_style == "Minimal Pill") ?
-                                    rgba(255, 255, 255, 0.28) :
-                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.48) 0%, rgba(235, 242, 250, 0.24) 48%, rgba(255, 255, 255, 0.36) 100%);
-                                border-width: 1.25px;
-                                border-color: rgba(255, 255, 255, 0.80);
-
-                                // Inset top specular highlight
-                                Rectangle {
-                                    x: 12px;
-                                    y: 1px;
-                                    width: parent.width - 24px;
-                                    height: 1.2px;
-                                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, #ffffff 50%, rgba(255, 255, 255, 0.0) 100%);
-                                }
+                                    rgba(255, 255, 255, 0.22) :
+                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(235, 242, 250, 0.14) 48%, rgba(255, 255, 255, 0.22) 100%);
                             }
                         }
 
@@ -491,23 +440,12 @@ export component MainWindow inherits Window {
                     width: 100%;
                     height: 100%;
 
-                    // Body
+                    // Body (No borders)
                     Rectangle {
                         width: 100%;
                         height: 100%;
                         border-radius: 13px;
-                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.50) 0%, rgba(230, 235, 245, 0.26) 48%, rgba(255, 255, 255, 0.38) 100%);
-                        border-width: 1.2px;
-                        border-color: rgba(255, 255, 255, 0.75);
-
-                        // Inset specular line
-                        Rectangle {
-                            x: 8px;
-                            y: 1px;
-                            width: parent.width - 16px;
-                            height: 1px;
-                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, #ffffff 50%, rgba(255, 255, 255, 0.0) 100%);
-                        }
+                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.40) 0%, rgba(230, 235, 245, 0.18) 48%, rgba(255, 255, 255, 0.26) 100%);
                     }
                 }
 
@@ -577,8 +515,6 @@ export component MainWindow inherits Window {
                     height: 100%;
                     border-radius: 14px;
                     background: @linear-gradient(165deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.16) 100%);
-                    border-width: 1px;
-                    border-color: rgba(255, 255, 255, 0.50);
                 }
 
                 Text {
@@ -645,22 +581,12 @@ export component MainWindow inherits Window {
                     width: 100%;
                     height: 100%;
 
-                    // Body
+                    // Body (No borders)
                     Rectangle {
                         width: 100%;
                         height: 100%;
                         border-radius: 13px;
-                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.48) 0%, rgba(230, 235, 245, 0.24) 48%, rgba(255, 255, 255, 0.36) 100%);
-                        border-width: 1.2px;
-                        border-color: rgba(255, 255, 255, 0.75);
-
-                        Rectangle {
-                            x: 6px;
-                            y: 1px;
-                            width: parent.width - 12px;
-                            height: 1px;
-                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, #ffffff 50%, rgba(255, 255, 255, 0.0) 100%);
-                        }
+                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.40) 0%, rgba(230, 235, 245, 0.18) 48%, rgba(255, 255, 255, 0.26) 100%);
                     }
                 }
 
@@ -890,9 +816,7 @@ export component MainWindow inherits Window {
                     width: 78px;
                     height: 28px;
                     border-radius: 14px;
-                    background: rgba(255, 255, 255, 0.08);
-                    border-width: 1px;
-                    border-color: rgba(255, 255, 255, 0.15);
+                    background: rgba(255, 255, 255, 0.12);
 
                     Text {
                         x: 0px;
@@ -914,14 +838,12 @@ export component MainWindow inherits Window {
                     height: 40px;
                     border-radius: 12px;
 
-                    // Focused elevated luminous plate
+                    // Focused elevated luminous plate (No borders)
                     if (root.selected_setting == s_idx): Rectangle {
                         width: 100%;
                         height: 100%;
                         border-radius: 12px;
                         background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                        border-width: 1.2px;
-                        border-color: #ffffff;
                     }
 
                     // Label & Value
@@ -971,9 +893,7 @@ export component MainWindow inherits Window {
                         width: 32px;
                         height: 22px;
                         border-radius: 11px;
-                        background: rgba(255, 255, 255, 0.20);
-                        border-width: 1px;
-                        border-color: rgba(255, 255, 255, 0.35);
+                        background: rgba(255, 255, 255, 0.22);
 
                         Text {
                             x: 0px;
@@ -1034,9 +954,7 @@ export component MainWindow inherits Window {
                     border-radius: 14px;
                     background: (root.selected_detail_option == -1) ?
                         @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%) :
-                        rgba(255, 255, 255, 0.10);
-                    border-width: 1px;
-                    border-color: (root.selected_detail_option == -1) ? #ffffff : rgba(255, 255, 255, 0.20);
+                        rgba(255, 255, 255, 0.12);
 
                     Text {
                         x: 0px;
@@ -1087,14 +1005,12 @@ export component MainWindow inherits Window {
                         height: 44px;
                         border-radius: 12px;
 
-                        // Focused elevated luminous plate
+                        // Focused elevated luminous plate (No borders)
                         if (root.selected_detail_option == o_idx): Rectangle {
                             width: 100%;
                             height: 100%;
                             border-radius: 12px;
                             background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                            border-width: 1.2px;
-                            border-color: #ffffff;
                         }
 
                         animate y { duration: 120ms; }
@@ -1148,9 +1064,7 @@ export component MainWindow inherits Window {
                         width: 32px;
                         height: 22px;
                         border-radius: 11px;
-                        background: rgba(255, 255, 255, 0.20);
-                        border-width: 1px;
-                        border-color: rgba(255, 255, 255, 0.35);
+                        background: rgba(255, 255, 255, 0.22);
 
                         Text {
                             x: 0px;
