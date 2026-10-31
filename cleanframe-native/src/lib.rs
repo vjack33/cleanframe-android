@@ -31,22 +31,22 @@ pub const WALLPAPERS: [WallpaperMeta; 15] = [
     WallpaperMeta { id: "alpine", name: "Alpine glow", credit: "Cristina Gottardi · Unsplash", desc: "Alpenglow mountain peaks at sunrise" },
 ];
 
-const WALLPAPER_THUMBS: [&[u8]; 15] = [
-    include_bytes!("../ui/assets/wallpapers/misty-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/cove-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/forest-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/valley-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/night-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/peaks-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/bridge-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/ridge-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/golden-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/summit-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/goldcoast-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/sydney-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/amber-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/mint-thumb.jpg"),
-    include_bytes!("../ui/assets/wallpapers/alpine-thumb.jpg"),
+const WALLPAPER_FULL: [&[u8]; 15] = [
+    include_bytes!("../ui/assets/wallpapers/misty.jpg"),
+    include_bytes!("../ui/assets/wallpapers/cove.jpg"),
+    include_bytes!("../ui/assets/wallpapers/forest.jpg"),
+    include_bytes!("../ui/assets/wallpapers/valley.jpg"),
+    include_bytes!("../ui/assets/wallpapers/night.jpg"),
+    include_bytes!("../ui/assets/wallpapers/peaks.jpg"),
+    include_bytes!("../ui/assets/wallpapers/bridge.jpg"),
+    include_bytes!("../ui/assets/wallpapers/ridge.jpg"),
+    include_bytes!("../ui/assets/wallpapers/golden.jpg"),
+    include_bytes!("../ui/assets/wallpapers/summit.jpg"),
+    include_bytes!("../ui/assets/wallpapers/goldcoast.jpg"),
+    include_bytes!("../ui/assets/wallpapers/sydney.jpg"),
+    include_bytes!("../ui/assets/wallpapers/amber.jpg"),
+    include_bytes!("../ui/assets/wallpapers/mint.jpg"),
+    include_bytes!("../ui/assets/wallpapers/alpine.jpg"),
 ];
 
 /// Dynamic on-the-fly blur for ANY custom wallpaper file from disk, gallery, or USB.
@@ -84,21 +84,21 @@ const UTIL_LABELS: [&str; 4] = ["Art Mode", "All apps", "Inputs", "Settings"];
 
 pub const BLUR_LEVEL_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
 pub const BLUR_LEVEL_DESCS: [&str; 4] = [
-    "No blur · Completely transparent clear glass",
-    "Subtle diffusion · Light frost (radius 8)",
-    "Default diffusion · Balanced optical frost (radius 20)",
-    "Strong diffusion · Deep frosted glass (radius 35)",
+    "No blur · Crystal-clear transparent glass substrate",
+    "Subtle diffusion · Light optical frost",
+    "Default diffusion · Balanced silky frosted glass",
+    "Strong diffusion · Deep frosted atmospheric glass",
 ];
-pub const BLUR_RADII: [usize; 4] = [0, 8, 20, 35];
+pub const BLUR_RADII: [usize; 4] = [0, 16, 40, 75];
 
 pub const REFRACTION_LEVEL_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
 pub const REFRACTION_LEVEL_DESCS: [&str; 4] = [
-    "No refraction · Flat borderless glass",
-    "Subtle curvature · Gentle optical bevel bend (3.2px)",
-    "Default curvature · Balanced crown glass lens bevel (6.5px)",
-    "Strong curvature · Pronounced liquid glass rim warping (11.0px)",
+    "No refraction · Flat borderless glass substrate",
+    "Subtle curvature · Gentle liquid bevel bend",
+    "Default curvature · Balanced optical liquid glass bevel",
+    "Strong curvature · Pronounced fluid lens edge refraction",
 ];
-pub const REFRACTION_DISTANCES: [f32; 4] = [0.0, 3.2, 6.5, 11.0];
+pub const REFRACTION_DISTANCES: [f32; 4] = [0.0, 14.0, 28.0, 48.0];
 
 #[derive(Default)]
 pub struct AppState {
@@ -134,10 +134,10 @@ impl AppState {
         if let Some(pair) = cache.get(&idx) {
             return pair.clone();
         }
-        let bytes = if idx < WALLPAPER_THUMBS.len() {
-            WALLPAPER_THUMBS[idx]
+        let bytes = if idx < WALLPAPER_FULL.len() {
+            WALLPAPER_FULL[idx]
         } else {
-            WALLPAPER_THUMBS[0]
+            WALLPAPER_FULL[0]
         };
         let radius = BLUR_RADII[self.blur_level.min(3)];
         let ref_dist = REFRACTION_DISTANCES[self.refraction_level.min(3)];
@@ -672,7 +672,7 @@ fn android_main(app: slint::android::AndroidApp) {
         layout_mode: "Dock", // Dock default (matching real TV webview)
         typography: "Manrope",
         material: "Frost",
-        focus_style: "Glass, Soft",
+        focus_style: "Glass Plate",
         icon_pack: "CleanFrame default",
         art_mode: false,
         art_saved_notice: false,
@@ -786,7 +786,7 @@ fn android_main(app: slint::android::AndroidApp) {
                     if s.selected_detail_option < max_opt {
                         s.selected_detail_option += 1;
                     }
-                } else if s.selected_setting < 9 {
+                } else if s.selected_setting < 10 {
                     s.selected_setting += 1;
                 }
             } else if s.layout_mode == "Dock" {
@@ -1057,25 +1057,26 @@ fn open_settings_detail(s: &mut AppState) {
         }
         6 => {
             s.current_group = "focus";
-            s.selected_detail_option = if s.focus_style == "Minimal Pill" {
-                1
-            } else if s.material == "Frost" {
-                2
-            } else if s.material == "Clear tint" {
-                3
-            } else {
-                0
-            };
+            s.selected_detail_option = if s.focus_style == "Minimal Type" { 1 } else { 0 };
         }
         7 => {
+            s.current_group = "material";
+            s.selected_detail_option = match s.material {
+                "Frost" => 0,
+                "Soft" => 1,
+                "Obsidian Tint" => 2,
+                _ => 3, // "Clear"
+            };
+        }
+        8 => {
             s.current_group = "inputs";
             s.selected_detail_option = 0;
         }
-        8 => {
+        9 => {
             s.current_group = "editor";
             s.selected_detail_option = 0;
         }
-        9 => {
+        10 => {
             s.current_group = "samsung";
             s.selected_detail_option = 0;
         }
@@ -1094,7 +1095,8 @@ fn get_detail_options_len(group: &str) -> usize {
         "refraction" => REFRACTION_LEVEL_NAMES.len(),
         "typography" => 3,
         "icons" => 2,
-        "focus" => 4,
+        "focus" => 2,
+        "material" => 4,
         "inputs" => 4,
         "editor" => 1,
         "samsung" => 2,
@@ -1135,23 +1137,15 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
             s.icon_pack = if s.selected_detail_option == 0 { "CleanFrame default" } else { "Full Color" };
         }
         "focus" => {
-            match s.selected_detail_option {
-                0 => {
-                    s.focus_style = "Glass, Soft";
-                    s.material = "Soft";
-                }
-                1 => {
-                    s.focus_style = "Minimal Pill";
-                }
-                2 => {
-                    s.focus_style = "Glass, Soft";
-                    s.material = "Frost";
-                }
-                _ => {
-                    s.focus_style = "Glass, Soft";
-                    s.material = "Clear tint";
-                }
-            }
+            s.focus_style = if s.selected_detail_option == 0 { "Glass Plate" } else { "Minimal Type" };
+        }
+        "material" => {
+            s.material = match s.selected_detail_option {
+                0 => "Frost",
+                1 => "Soft",
+                2 => "Obsidian Tint",
+                _ => "Clear",
+            };
         }
         "inputs" => {
             if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < HDMI_IDS.len() {
@@ -1245,16 +1239,20 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
         settings.set_row_data(6, r);
     }
     if let Some(mut r) = settings.row_data(7) {
-        r.value = "Device dependent".into();
+        r.value = s.material.into();
         settings.set_row_data(7, r);
     }
     if let Some(mut r) = settings.row_data(8) {
-        r.value = "8 apps".into();
+        r.value = "Device dependent".into();
         settings.set_row_data(8, r);
     }
     if let Some(mut r) = settings.row_data(9) {
-        r.value = "Home and TV settings".into();
+        r.value = "8 apps".into();
         settings.set_row_data(9, r);
+    }
+    if let Some(mut r) = settings.row_data(10) {
+        r.value = "Home and TV settings".into();
+        settings.set_row_data(10, r);
     }
 
     // Update Detail Submenu Options
@@ -1363,32 +1361,50 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                 win.set_detail_options(list.into());
             }
             "focus" => {
-                win.set_detail_title("Focus & Material".into());
-                win.set_detail_desc("Configure highlight plate treatment and glass translucency.".into());
+                win.set_detail_title("Focus Style".into());
+                win.set_detail_desc("Configure how the active selection is highlighted on Home.".into());
                 let list = Rc::new(VecModel::default());
                 list.push(DetailOption {
-                    id: "glass_soft".into(),
-                    title: "Glass, Soft".into(),
-                    desc: "Liquid specular gradient with beveled glass glow and top rim".into(),
-                    active: s.focus_style == "Glass, Soft" && s.material == "Soft",
+                    id: "glass_plate".into(),
+                    title: "Glass Plate".into(),
+                    desc: "Luminous floating liquid glass plate with specular rim behind focused item".into(),
+                    active: s.focus_style == "Glass Plate",
                 });
                 list.push(DetailOption {
-                    id: "minimal".into(),
-                    title: "Minimal Pill".into(),
-                    desc: "Clean understated outline with subtle frosted fill".into(),
-                    active: s.focus_style == "Minimal Pill",
+                    id: "minimal_type".into(),
+                    title: "Minimal Type".into(),
+                    desc: "Pure borderless typography: removes box plate; enlarges active icon & text".into(),
+                    active: s.focus_style == "Minimal Type",
                 });
+                win.set_detail_options(list.into());
+            }
+            "material" => {
+                win.set_detail_title("Glass Material".into());
+                win.set_detail_desc("Select glass translucency and color tint for dock and floating panels.".into());
+                let list = Rc::new(VecModel::default());
                 list.push(DetailOption {
                     id: "frost".into(),
                     title: "Frost".into(),
-                    desc: "Liquid specular frosted glass with balanced scrim contrast".into(),
-                    active: s.focus_style == "Glass, Soft" && s.material == "Frost",
+                    desc: "Apple-style luminous frosty glass with bright specular rim and clean diffusion".into(),
+                    active: s.material == "Frost",
                 });
                 list.push(DetailOption {
-                    id: "tint".into(),
-                    title: "Clear tint".into(),
-                    desc: "Deep atmospheric obsidian tint for high-contrast legible text".into(),
-                    active: s.focus_style == "Glass, Soft" && s.material == "Clear tint",
+                    id: "soft".into(),
+                    title: "Soft".into(),
+                    desc: "Balanced neutral translucency with gentle warm ambient shading".into(),
+                    active: s.material == "Soft",
+                });
+                list.push(DetailOption {
+                    id: "obsidian".into(),
+                    title: "Obsidian Tint".into(),
+                    desc: "Deep dark smoky obsidian glass for cinematic contrast and dark mode".into(),
+                    active: s.material == "Obsidian Tint",
+                });
+                list.push(DetailOption {
+                    id: "clear".into(),
+                    title: "Clear".into(),
+                    desc: "Ultra-sheer transparent glass substrate showcasing pure wallpaper colors".into(),
+                    active: s.material == "Clear",
                 });
                 win.set_detail_options(list.into());
             }

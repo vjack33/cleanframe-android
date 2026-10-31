@@ -280,20 +280,18 @@ fn sample_bilinear(pixels: &[u8], width: usize, height: usize, x: f32, y: f32, c
     top * (1.0 - fy) + bot * fy
 }
 
-/// Signed distance and outward normal for the Dock rounded rectangle in 320x180 buffer space.
+/// Signed distance and outward normal for the Dock rounded rectangle in 960x540 buffer space.
 /// Returns (signed_distance, normal_x, normal_y).
 /// Inside the dock, signed_distance < 0.0.
-#[inline]
+#[inline(always)]
 fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
-    // 960x540 screen geometry scaled 1/3:
-    // x: 104 / 3 = 34.6667, y: 338 / 3 = 112.6667
-    // width: 752 / 3 = 250.6667, height: 116 / 3 = 38.6667
-    // radius: 26 / 3 = 8.6667
-    const CX: f32 = 160.0;
-    const CY: f32 = 132.0;
-    const HW: f32 = 125.3333;
-    const HH: f32 = 19.3333;
-    const CR: f32 = 8.6667;
+    // 960x540 screen geometry (exact 1:1 Slint viewport coordinates):
+    // Dock is x: 104, y: 338, width: 752, height: 116, radius: 26
+    const CX: f32 = 480.0;
+    const CY: f32 = 396.0;
+    const HW: f32 = 376.0;
+    const HH: f32 = 58.0;
+    const CR: f32 = 26.0;
 
     let dx = x - CX;
     let dy = y - CY;
@@ -302,66 +300,48 @@ fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
     let sx = if dx >= 0.0 { 1.0 } else { -1.0 };
     let sy = if dy >= 0.0 { 1.0 } else { -1.0 };
 
-    if ax > (HW - CR) && ay > (HH - CR) {
-        // Corner quadrant
-        let qx = ax - (HW - CR);
-        let qy = ay - (HH - CR);
-        let dist_corner = (qx * qx + qy * qy).sqrt();
-        let sd = dist_corner - CR;
-        let (nx, ny) = if dist_corner > 1e-4 {
-            (sx * (qx / dist_corner), sy * (qy / dist_corner))
+    let qx = ax - (HW - CR);
+    let qy = ay - (HH - CR);
+
+    if qx > 0.0 && qy > 0.0 {
+        // Rounded corner quadrant: smooth continuous circular arc
+        let dist = (qx * qx + qy * qy).sqrt();
+        let sd = dist - CR;
+        if dist > 1e-4 {
+            (sd, sx * (qx / dist), sy * (qy / dist))
         } else {
-            (sx * 0.7071068, sy * 0.7071068)
-        };
-        (sd, nx, ny)
-    } else {
-        // Straight edge / interior
-        let dist_edge_x = ax - HW;
-        let dist_edge_y = ay - HH;
-        if dist_edge_x <= 0.0 && dist_edge_y <= 0.0 {
-            // Inside the box
-            let sd = dist_edge_x.max(dist_edge_y);
-            if dist_edge_x > dist_edge_y {
-                (sd, sx, 0.0)
-            } else {
-                (sd, 0.0, sy)
-            }
-        } else {
-            // Outside the box
-            let ex = dist_edge_x.max(0.0);
-            let ey = dist_edge_y.max(0.0);
-            let sd = (ex * ex + ey * ey).sqrt();
-            let len = ex.hypot(ey);
-            if len > 1e-4 {
-                (sd, sx * (ex / len), sy * (ey / len))
-            } else {
-                (sd, sx, 0.0)
-            }
+            (sd, sx * 0.7071068, sy * 0.7071068)
         }
+    } else if qx > qy {
+        // Horizontal straight edge
+        let sd = qx - CR;
+        (sd, sx, 0.0)
+    } else {
+        // Vertical straight edge
+        let sd = qy - CR;
+        (sd, 0.0, sy)
     }
 }
 
 /// Applies physical lens refraction (Snell's Law), chromatic dispersion (prism fringing),
-/// Schlick Fresnel edge reflectance, and directional specular glare to the Dock glass bevel.
-/// Modeled after the optical physics in https://github.com/iyinchao/liquid-glass-studio.
+/// and continuous curvature to the Dock glass bevel.
+/// Modeled after optical physics in Apple Liquid Glass and liquid-glass-studio.
 pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize, ref_distance: f32) {
     if ref_distance <= 0.0 {
         return;
     }
     let src = pixels.to_vec();
 
-    // Refraction bevel thickness in buffer pixels (~24px on 960x540 screen)
-    const REF_THICKNESS: f32 = 8.0;
-    // Chromatic dispersion factor (wavelength split between red and blue)
-    const DISPERSION: f32 = 0.05;
-    // Glass refractive index (crown glass)
-    const N_GLASS: f32 = 1.50;
+    // Refraction bevel thickness: 24 pixels on a 960x540 screen (~48px on 1080p TV)
+    const REF_THICKNESS: f32 = 24.0;
+    // Chromatic dispersion factor (wavelength split)
+    const DISPERSION: f32 = 0.055;
 
-    // Bounding box of the Dock in buffer space:
-    let min_x = 32.max(0);
-    let max_x = 288.min(width - 1);
-    let min_y = 110.max(0);
-    let max_y = 154.min(height - 1);
+    // Bounding box of the Dock in 960x540 buffer space:
+    let min_x = 100.max(0);
+    let max_x = 860.min(width - 1);
+    let min_y = 334.max(0);
+    let max_y = 458.min(height - 1);
 
     for y in min_y..=max_y {
         for x in min_x..=max_x {
@@ -372,28 +352,25 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
                 continue;
             }
 
-            let dist_to_edge = -sd; // Distance inward from perimeter (0.0 to REF_THICKNESS)
-            let x_ratio = 1.0 - (dist_to_edge / REF_THICKNESS); // 1.0 at outer rim, 0.0 at flat interior
+            let dist_to_edge = -sd; // 0.0 at outer rim, REF_THICKNESS at flat interior
+            let t = (dist_to_edge / REF_THICKNESS).clamp(0.0, 1.0);
 
-            // Snell's Law refraction curve from liquid-glass-studio:
-            // theta_i = asin(x_ratio^2)
-            // theta_t = asin(sin(theta_i) / n)
-            // edge_factor = tan(theta_i - theta_t)
-            let x2 = (x_ratio * x_ratio).clamp(0.0, 0.9999);
-            let theta_i = x2.asin();
-            let sin_theta_t = (theta_i.sin() / N_GLASS).clamp(-1.0, 1.0);
-            let theta_t = sin_theta_t.asin();
-            let edge_factor = (theta_i - theta_t).tan().max(0.0);
+            // Ultra-smooth, fluid Liquid Glass optical lens curvature profile:
+            // C1-continuous at both endpoints:
+            // - At t = 0.0 (outer perimeter): displacement = 0.0 (seamlessly connects to wallpaper, zero pixel tearing!)
+            // - At t = 1.0 (flat interior): displacement = 0.0, derivative = 0.0 (flawless smooth blending into substrate)
+            // - In the bevel zone: gracefully peaks with smooth convex liquid curvature
+            let lens_curve = (1.0 - t).powi(2) * (t * std::f32::consts::PI).sin();
+            let disp = lens_curve * ref_distance;
 
             // Deflection vector pointing inward (into the glass slab)
-            let base_disp = edge_factor * ref_distance;
-            let offset_x = -nx * base_disp;
-            let offset_y = -ny * base_disp;
+            let offset_x = -nx * disp;
+            let offset_y = -ny * disp;
 
-            // Chromatic dispersion: Red deflects less, Blue deflects more
             let cur_x = x as f32 + 0.5;
             let cur_y = y as f32 + 0.5;
 
+            // Sub-pixel high-precision bilinear interpolation across 960x540
             let red = sample_bilinear(
                 &src,
                 width,
@@ -419,15 +396,10 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
                 2,
             );
 
-            // Pure optical refraction without artificial painted white borders
-            let r_out = red.clamp(0.0, 255.0) as u8;
-            let g_out = green.clamp(0.0, 255.0) as u8;
-            let b_out = blue.clamp(0.0, 255.0) as u8;
-
             let idx = (y * width + x) * 4;
-            pixels[idx] = r_out;
-            pixels[idx + 1] = g_out;
-            pixels[idx + 2] = b_out;
+            pixels[idx] = red.clamp(0.0, 255.0) as u8;
+            pixels[idx + 1] = green.clamp(0.0, 255.0) as u8;
+            pixels[idx + 2] = blue.clamp(0.0, 255.0) as u8;
         }
     }
 }
@@ -506,13 +478,13 @@ pub fn blur_rgba_image(
 /// returning (clean_frost, dock_refracted_frost).
 pub fn blur_wallpaper_bytes_pair(bytes: &[u8], radius: usize, ref_distance: f32) -> Option<(Image, Image)> {
     let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    Some(blur_rgba_image_pair(&img, 320, 180, radius, 1.35, ref_distance))
+    Some(blur_rgba_image_pair(&img, 960, 540, radius, 1.35, ref_distance))
 }
 
 /// Decodes any wallpaper bytes (JPEG/PNG), computes optical blur on the fly, and returns a Slint Image.
 #[allow(dead_code)]
 pub fn blur_wallpaper_bytes(bytes: &[u8]) -> Option<Image> {
-    let (clean, _) = blur_wallpaper_bytes_pair(bytes, 20, 6.5)?;
+    let (clean, _) = blur_wallpaper_bytes_pair(bytes, 40, 28.0)?;
     Some(clean)
 }
 

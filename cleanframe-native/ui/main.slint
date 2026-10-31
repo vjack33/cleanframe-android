@@ -83,8 +83,8 @@ export component MainWindow inherits Window {
     in property <int> wallpaper_idx: 3; // 0..14 (All 15 Curated Photographic Wallpapers)
     in property <string> current_layout: "List"; // "List" | "Dock"
     in property <string> current_font: "Manrope"; // "Manrope" | "Newsreader" | "Geist"
-    in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Clear tint"
-    in property <string> current_focus_style: "Glass, Soft"; // "Glass, Soft" | "Minimal Pill"
+    in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Obsidian Tint" | "Clear"
+    in property <string> current_focus_style: "Glass Plate"; // "Glass Plate" | "Minimal Type"
     in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
     in property <image> dynamic_frost_image;
     in property <image> dock_frost_image;
@@ -138,7 +138,7 @@ export component MainWindow inherits Window {
     in property <int> selected_setting: 0;
     in property <int> selected_detail_option: 0;
 
-    // 10 Settings Overview Items (With Optical Blur & Liquid Glass Refraction)
+    // 11 Settings Overview Items (With Optical Blur & Liquid Glass Refraction)
     in property <[SettingItem]> settings_list: [
         { id: "background", label: "Background", value: "Bridge at dusk" },
         { id: "layout", label: "Layout", value: "Dock" },
@@ -146,7 +146,8 @@ export component MainWindow inherits Window {
         { id: "refraction", label: "Glass refraction", value: "Default" },
         { id: "typography", label: "Typography", value: "Manrope" },
         { id: "icons", label: "Icon pack", value: "CleanFrame default" },
-        { id: "focus", label: "Focus & Material", value: "Glass, Soft" },
+        { id: "focus", label: "Focus style", value: "Glass Plate" },
+        { id: "material", label: "Glass material", value: "Frost" },
         { id: "inputs", label: "TV inputs", value: "Device dependent" },
         { id: "editor", label: "Apps on Home", value: "8 apps" },
         { id: "samsung", label: "Samsung & TV", value: "Home and TV settings" }
@@ -255,7 +256,7 @@ export component MainWindow inherits Window {
                 height: 48px;
 
                 // Focus pill (Liquid Frosted Glass Capsule with Specular Highlight)
-                if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
+                if (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
                     x: 0px;
                     y: 0px;
                     width: 260px;
@@ -268,12 +269,16 @@ export component MainWindow inherits Window {
                         frost_image: root.dynamic_frost_image;
                         origin_x: 56px;
                         origin_y: 74px + i * 52px;
-                        glass_tint: (root.current_focus_style == "Minimal Pill") ?
-                            rgba(255, 255, 255, 0.28) :
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(240, 245, 250, 0.22) 48%, rgba(255, 255, 255, 0.35) 100%);
+                        glass_tint: (root.current_material == "Obsidian Tint") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.12) 0%, rgba(14, 18, 24, 0.70) 100%) :
+                            (root.current_material == "Frost") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(240, 245, 250, 0.22) 48%, rgba(255, 255, 255, 0.35) 100%) :
+                            (root.current_material == "Clear") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 100%) :
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(18, 22, 28, 0.35) 100%);
                         rim_color: rgba(255, 255, 255, 0.75);
                         rim_width: 1.2px;
-                        show_specular_hairline: (root.current_focus_style == "Glass, Soft");
+                        show_specular_hairline: true;
                         show_left_rim: false;
                     }
                 }
@@ -281,24 +286,31 @@ export component MainWindow inherits Window {
                 // App Brand Icon
                 Image {
                     x: 14px;
-                    y: 11px;
-                    width: 26px;
-                    height: 26px;
+                    y: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 9px : 11px;
+                    width: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
+                    height: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
                     image-fit: contain;
                     source: app.icon;
                     colorize: (root.current_icon_pack == "Full Color") ?
                         #ffffff :
-                        ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.85));
+                        ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
+                        (root.current_focus_style == "Minimal Type" ? rgba(246, 241, 231, 0.60) : rgba(246, 241, 231, 0.85)));
+
+                    animate y, width, height { duration: 140ms; }
                 }
 
                 // App Name
                 Text {
                     x: 52px;
-                    y: 9px;
+                    y: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 7px : 9px;
                     text: app.name;
-                    font-size: (root.active_zone == "apps" && root.selected_app == i) ? 26px : 24px;
+                    font-size: (root.active_zone == "apps" && root.selected_app == i) ?
+                        (root.current_focus_style == "Minimal Type" ? 28px : 26px) : 24px;
                     font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
-                    color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.78);
+                    color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
+                        (root.current_focus_style == "Minimal Type" ? rgba(246, 241, 231, 0.55) : rgba(246, 241, 231, 0.78));
+
+                    animate font-size { duration: 140ms; }
                 }
             }
         }
@@ -321,12 +333,17 @@ export component MainWindow inherits Window {
                 frost_image: root.dock_frost_image;
                 origin_x: (root.width - 752px) / 2;
                 origin_y: 338px;
-                glass_tint: (root.current_material == "Clear tint") ?
-                    @linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(18, 24, 32, 0.22) 70%, rgba(10, 14, 20, 0.36) 100%) :
-                    (root.current_material == "Soft") ?
-                    @linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 30%, rgba(24, 30, 38, 0.28) 70%, rgba(14, 18, 24, 0.42) 100%) :
-                    @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 30%, rgba(18, 22, 28, 0.25) 70%, rgba(12, 16, 22, 0.40) 100%);
-                rim_color: rgba(255, 255, 255, 0.34);
+                glass_tint: (root.current_material == "Obsidian Tint") ?
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(14, 18, 26, 0.65) 25%, rgba(6, 10, 16, 0.82) 100%) :
+                    (root.current_material == "Frost") ?
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.12) 30%, rgba(220, 230, 242, 0.16) 70%, rgba(180, 200, 220, 0.26) 100%) :
+                    (root.current_material == "Clear") ?
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.06) 100%) :
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(18, 22, 28, 0.26) 70%, rgba(10, 14, 18, 0.40) 100%);
+                rim_color: (root.current_material == "Obsidian Tint") ? rgba(255, 255, 255, 0.22) :
+                           (root.current_material == "Frost") ? rgba(255, 255, 255, 0.55) :
+                           (root.current_material == "Clear") ? rgba(255, 255, 255, 0.24) :
+                           rgba(255, 255, 255, 0.34);
                 rim_width: 1.25px;
                 show_specular_hairline: true;
                 show_left_rim: true;
@@ -356,7 +373,7 @@ export component MainWindow inherits Window {
                         border-radius: 16px;
 
                         // Focused Tile Liquid Glass Plate
-                        if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
+                        if (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
                             x: 6px;
                             y: 4px;
                             width: parent.width - 12px;
@@ -367,33 +384,43 @@ export component MainWindow inherits Window {
                                 width: 100%;
                                 height: 100%;
                                 border-radius: 18px;
-                                background: (root.current_focus_style == "Minimal Pill") ?
-                                    rgba(255, 255, 255, 0.22) :
-                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(235, 242, 250, 0.14) 48%, rgba(255, 255, 255, 0.22) 100%);
+                                background: (root.current_material == "Obsidian Tint") ?
+                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 48%, rgba(255, 255, 255, 0.18) 100%) :
+                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.34) 0%, rgba(235, 242, 250, 0.14) 48%, rgba(255, 255, 255, 0.24) 100%);
                             }
                         }
 
                         // App Brand Icon
                         Image {
                             x: (parent.width - self.width) / 2;
-                            y: (root.active_zone == "apps" && root.selected_app == i) ? 18px : 20px;
-                            width: (root.active_zone == "apps" && root.selected_app == i) ? 34px : 30px;
-                            height: (root.active_zone == "apps" && root.selected_app == i) ? 34px : 30px;
+                            y: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 14px : 18px) : 20px;
+                            width: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 40px : 34px) : 30px;
+                            height: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 40px : 34px) : 30px;
                             image-fit: contain;
                             source: app.icon;
-                            colorize: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(255, 255, 255, 0.85);
+                            colorize: (root.active_zone == "apps" && root.selected_app == i) ?
+                                #ffffff :
+                                (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.60) : rgba(255, 255, 255, 0.85));
+
+                            animate y, width, height { duration: 140ms; }
                         }
 
                         // App Label
                         Text {
                             x: 4px;
-                            y: 62px;
+                            y: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 64px : 62px;
                             width: parent.width - 8px;
                             horizontal-alignment: center;
                             text: app.name;
-                            font-size: (root.active_zone == "apps" && root.selected_app == i) ? 13px : 12px;
-                            font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 600 : 500;
-                            color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff : rgba(246, 241, 231, 0.78);
+                            font-size: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 14px : 13px) : 12px;
+                            font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
+                            color: (root.active_zone == "apps" && root.selected_app == i) ?
+                                #ffffff :
+                                (root.current_focus_style == "Minimal Type" ? rgba(246, 241, 231, 0.55) : rgba(246, 241, 231, 0.78));
                             overflow: elide;
                         }
                     }
@@ -418,7 +445,13 @@ export component MainWindow inherits Window {
                 frost_image: root.dynamic_frost_image;
                 origin_x: (root.current_layout == "List") ? 530px : (root.width - 392px) / 2;
                 origin_y: (root.current_layout == "List") ? 330px : 294px;
-                glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 24, 30, 0.32) 100%);
+                glass_tint: (root.current_material == "Obsidian Tint") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.10) 0%, rgba(14, 18, 24, 0.65) 100%) :
+                    (root.current_material == "Frost") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.30) 0%, rgba(220, 230, 242, 0.18) 100%) :
+                    (root.current_material == "Clear") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0.08) 100%) :
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 22, 26, 0.30) 100%);
                 rim_color: rgba(255, 255, 255, 0.32);
                 rim_width: 1px;
                 show_specular_hairline: true;
@@ -560,7 +593,13 @@ export component MainWindow inherits Window {
                 frost_image: root.dynamic_frost_image;
                 origin_x: root.width - 396px;
                 origin_y: 36px;
-                glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 22, 26, 0.30) 100%);
+                glass_tint: (root.current_material == "Obsidian Tint") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.10) 0%, rgba(14, 18, 24, 0.65) 100%) :
+                    (root.current_material == "Frost") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.30) 0%, rgba(220, 230, 242, 0.18) 100%) :
+                    (root.current_material == "Clear") ?
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0.08) 100%) :
+                    @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 22, 26, 0.30) 100%);
                 rim_color: rgba(255, 255, 255, 0.32);
                 rim_width: 1px;
                 show_specular_hairline: true;
@@ -837,7 +876,7 @@ export component MainWindow inherits Window {
 
                     for s[s_idx] in root.settings_list: Rectangle {
                         x: 0px;
-                        y: s_idx * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 82px);
+                        y: s_idx * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 123px);
                         width: parent.width;
                         height: 38px;
                         border-radius: 10px;
@@ -1188,7 +1227,10 @@ export component MainWindow inherits Window {
                     Rectangle {
                         width: 100%;
                         height: 100%;
-                        background: rgba(255, 255, 255, 0.16);
+                        background: (root.current_material == "Obsidian Tint") ? rgba(10, 14, 20, 0.70) :
+                                    (root.current_material == "Frost") ? rgba(255, 255, 255, 0.26) :
+                                    (root.current_material == "Clear") ? rgba(255, 255, 255, 0.08) :
+                                    rgba(255, 255, 255, 0.16);
                     }
                     Text {
                         x: 0px;
@@ -1225,7 +1267,10 @@ export component MainWindow inherits Window {
                     Rectangle {
                         width: 100%;
                         height: 100%;
-                        background: rgba(255, 255, 255, 0.16);
+                        background: (root.current_material == "Obsidian Tint") ? rgba(10, 14, 20, 0.70) :
+                                    (root.current_material == "Frost") ? rgba(255, 255, 255, 0.26) :
+                                    (root.current_material == "Clear") ? rgba(255, 255, 255, 0.08) :
+                                    rgba(255, 255, 255, 0.16);
                     }
                     Text {
                         x: 0px;
@@ -1265,7 +1310,13 @@ export component MainWindow inherits Window {
                     Rectangle {
                         width: 100%;
                         height: 100%;
-                        background: @linear-gradient(155deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 30%, rgba(18, 22, 28, 0.20) 70%, rgba(12, 16, 22, 0.32) 100%);
+                        background: (root.current_material == "Obsidian Tint") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(14, 18, 26, 0.65) 25%, rgba(6, 10, 16, 0.82) 100%) :
+                            (root.current_material == "Frost") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.12) 30%, rgba(220, 230, 242, 0.16) 70%, rgba(180, 200, 220, 0.26) 100%) :
+                            (root.current_material == "Clear") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.06) 100%) :
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(18, 22, 28, 0.26) 70%, rgba(10, 14, 18, 0.40) 100%);
                     }
 
                     // Mini carousel apps
@@ -1277,18 +1328,20 @@ export component MainWindow inherits Window {
                         border-radius: 8px;
 
                         // Focused plate
-                        if (root.selected_app == i): Rectangle {
+                        if (root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
                             width: 100%;
                             height: 100%;
                             border-radius: 8px;
-                            background: @linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, rgba(235, 242, 250, 0.16) 48%, rgba(255, 255, 255, 0.22) 100%);
+                            background: (root.current_material == "Obsidian Tint") ?
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.10) 48%, rgba(255, 255, 255, 0.20) 100%) :
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, rgba(235, 242, 250, 0.16) 48%, rgba(255, 255, 255, 0.22) 100%);
                         }
 
                         Image {
-                            x: (parent.width - 16px) / 2;
-                            y: 8px;
-                            width: 16px;
-                            height: 16px;
+                            x: (parent.width - self.width) / 2;
+                            y: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 6px : 8px;
+                            width: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 18px : 16px;
+                            height: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 18px : 16px;
                             image-fit: contain;
                             source: app.icon;
                         }
@@ -1299,8 +1352,8 @@ export component MainWindow inherits Window {
                             width: parent.width;
                             horizontal-alignment: center;
                             text: app.name;
-                            font-size: 7px;
-                            font-weight: 500;
+                            font-size: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 8px : 7px;
+                            font-weight: (root.selected_app == i) ? 700 : 500;
                             color: #ffffff;
                             overflow: elide;
                         }
@@ -1320,7 +1373,7 @@ export component MainWindow inherits Window {
                         height: 18px;
                         border-radius: 6px;
 
-                        if (root.selected_app == i): Rectangle {
+                        if (root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
                             width: 120px;
                             height: 100%;
                             border-radius: 6px;
@@ -1331,8 +1384,8 @@ export component MainWindow inherits Window {
                             x: 10px;
                             y: 2px;
                             text: app.name;
-                            font-size: 10px;
-                            font-weight: 500;
+                            font-size: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 11px : 10px;
+                            font-weight: (root.selected_app == i) ? 700 : 500;
                             color: #ffffff;
                         }
                     }
