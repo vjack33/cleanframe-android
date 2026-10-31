@@ -1,5 +1,7 @@
 slint::include_modules!();
 
+mod blur;
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use slint::{ComponentHandle, Model, VecModel};
@@ -28,6 +30,31 @@ pub const WALLPAPERS: [WallpaperMeta; 15] = [
     WallpaperMeta { id: "mint", name: "Mint wave", credit: "MagicPattern · Unsplash", desc: "Crashing turquoise ocean wave crest" },
     WallpaperMeta { id: "alpine", name: "Alpine glow", credit: "Cristina Gottardi · Unsplash", desc: "Alpenglow mountain peaks at sunrise" },
 ];
+
+const WALLPAPER_THUMBS: [&[u8]; 15] = [
+    include_bytes!("../ui/assets/wallpapers/misty-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/cove-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/forest-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/valley-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/night-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/peaks-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/bridge-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/ridge-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/golden-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/summit-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/goldcoast-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/sydney-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/amber-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/mint-thumb.jpg"),
+    include_bytes!("../ui/assets/wallpapers/alpine-thumb.jpg"),
+];
+
+/// Dynamic on-the-fly blur for ANY custom wallpaper file from disk, gallery, or USB.
+#[allow(dead_code)]
+pub fn get_frost_for_custom_file(path: &str) -> Option<slint::Image> {
+    let bytes = std::fs::read(path).ok()?;
+    blur::blur_wallpaper_bytes(&bytes)
+}
 
 pub const APP_NAMES: [&str; 8] = [
     "SmartTube",
@@ -78,6 +105,27 @@ pub struct AppState {
     pub now_playing_title: String,
     pub now_playing_artist: String,
     pub now_playing_playing: bool,
+    pub frost_cache: std::cell::RefCell<std::collections::HashMap<usize, slint::Image>>,
+}
+
+impl AppState {
+    pub fn get_frost_image(&self, idx: usize) -> slint::Image {
+        let mut cache = self.frost_cache.borrow_mut();
+        if let Some(img) = cache.get(&idx) {
+            return img.clone();
+        }
+        let bytes = if idx < WALLPAPER_THUMBS.len() {
+            WALLPAPER_THUMBS[idx]
+        } else {
+            WALLPAPER_THUMBS[0]
+        };
+        if let Some(img) = blur::blur_wallpaper_bytes(bytes) {
+            cache.insert(idx, img.clone());
+            img
+        } else {
+            slint::Image::default()
+        }
+    }
 }
 
 fn get_candidates(package: &str) -> Vec<&str> {
@@ -604,12 +652,14 @@ fn android_main(app: slint::android::AndroidApp) {
         now_playing_title: "CleanFrame Ambient".to_string(),
         now_playing_artist: "The Frame Audio".to_string(),
         now_playing_playing: false,
+        frost_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
     }));
 
     main_window.set_clock_text("3:37".into());
     main_window.set_focused_caption("Prime Video".into());
     main_window.set_selected_app(3);
     main_window.set_wallpaper_idx(6);
+    main_window.set_dynamic_frost_image(state.borrow().get_frost_image(6));
     main_window.set_current_layout("Dock".into());
     main_window.set_now_playing_visible(false);
 
@@ -1043,6 +1093,7 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_settings_open(s.settings_open);
     win.set_settings_detail(s.settings_detail);
     win.set_wallpaper_idx(s.wallpaper_idx as i32);
+    win.set_dynamic_frost_image(s.get_frost_image(s.wallpaper_idx));
     win.set_current_layout(s.layout_mode.into());
     win.set_current_font(s.typography.into());
     win.set_current_material(s.material.into());

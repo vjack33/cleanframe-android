@@ -28,7 +28,7 @@ export struct DetailOption {
 }
 
 component LiquidGlassPanel inherits Rectangle {
-    in property <int> wallpaper_idx: 3;
+    in property <image> frost_image;
     in property <length> scene_width: 960px;
     in property <length> scene_height: 540px;
     in property <length> origin_x: 0px;
@@ -51,28 +51,14 @@ component LiquidGlassPanel inherits Rectangle {
         border-radius: root.border-radius;
         clip: true;
 
-        // 1:1 Co-located blurred wallpaper
+        // 1:1 Co-located blurred wallpaper computed dynamically at runtime
         Image {
             x: -root.origin_x;
             y: -root.origin_y;
             width: root.scene_width;
             height: root.scene_height;
             image-fit: cover;
-            source: (root.wallpaper_idx == 0) ? @image-url("assets/materials/misty-field-frost.jpg") :
-                    (root.wallpaper_idx == 1) ? @image-url("assets/materials/cove-field-frost.jpg") :
-                    (root.wallpaper_idx == 2) ? @image-url("assets/materials/forest-field-frost.jpg") :
-                    (root.wallpaper_idx == 3) ? @image-url("assets/materials/valley-field-frost.jpg") :
-                    (root.wallpaper_idx == 4) ? @image-url("assets/materials/night-field-frost.jpg") :
-                    (root.wallpaper_idx == 5) ? @image-url("assets/materials/peaks-field-frost.jpg") :
-                    (root.wallpaper_idx == 6) ? @image-url("assets/materials/bridge-field-frost.jpg") :
-                    (root.wallpaper_idx == 7) ? @image-url("assets/materials/ridge-field-frost.jpg") :
-                    (root.wallpaper_idx == 8) ? @image-url("assets/materials/golden-field-frost.jpg") :
-                    (root.wallpaper_idx == 9) ? @image-url("assets/materials/summit-field-frost.jpg") :
-                    (root.wallpaper_idx == 10) ? @image-url("assets/materials/goldcoast-field-frost.jpg") :
-                    (root.wallpaper_idx == 11) ? @image-url("assets/materials/sydney-field-frost.jpg") :
-                    (root.wallpaper_idx == 12) ? @image-url("assets/materials/amber-field-frost.jpg") :
-                    (root.wallpaper_idx == 13) ? @image-url("assets/materials/mint-field-frost.jpg") :
-                    @image-url("assets/materials/alpine-field-frost.jpg");
+            source: root.frost_image;
         }
 
         // Luminous Glass Body Tint & Perimeter Rim
@@ -129,6 +115,7 @@ export component MainWindow inherits Window {
     in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Clear tint"
     in property <string> current_focus_style: "Glass, Soft"; // "Glass, Soft" | "Minimal Pill"
     in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
+    in property <image> dynamic_frost_image;
 
     // Primary Home Apps (8 Apps)
     in property <[AppItem]> apps: [
@@ -304,7 +291,7 @@ export component MainWindow inherits Window {
                         width: 100%;
                         height: 100%;
                         border-radius: 24px;
-                        wallpaper_idx: root.wallpaper_idx;
+                        frost_image: root.dynamic_frost_image;
                         origin_x: 56px;
                         origin_y: 74px + i * 52px;
                         glass_tint: (root.current_focus_style == "Minimal Pill") ?
@@ -357,7 +344,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 26px;
-                wallpaper_idx: root.wallpaper_idx;
+                frost_image: root.dynamic_frost_image;
                 origin_x: (root.width - 752px) / 2;
                 origin_y: 338px;
                 glass_tint: (root.current_material == "Clear tint") ?
@@ -465,7 +452,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 16px;
-                wallpaper_idx: root.wallpaper_idx;
+                frost_image: root.dynamic_frost_image;
                 origin_x: (root.current_layout == "List") ? 530px : (root.width - 392px) / 2;
                 origin_y: (root.current_layout == "List") ? 330px : 294px;
                 glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 24, 30, 0.32) 100%);
@@ -620,7 +607,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 16px;
-                wallpaper_idx: root.wallpaper_idx;
+                frost_image: root.dynamic_frost_image;
                 origin_x: root.width - 396px;
                 origin_y: 36px;
                 glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 22, 26, 0.30) 100%);
@@ -704,7 +691,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 18px;
-                wallpaper_idx: root.wallpaper_idx;
+                frost_image: root.dynamic_frost_image;
                 origin_x: (root.current_layout == "List") ? 540px : (root.width - 230px) / 2;
                 origin_y: (root.current_layout == "List") ? 284px : 252px;
                 glass_tint: (root.active_zone == "media") ?
@@ -779,7 +766,7 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
                 border-radius: 20px;
-                wallpaper_idx: root.wallpaper_idx;
+                frost_image: root.dynamic_frost_image;
                 origin_x: 56px;
                 origin_y: root.height - 130px;
                 glass_tint: @linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(18, 22, 28, 0.58) 70%, rgba(10, 14, 18, 0.78) 100%);
@@ -864,7 +851,7 @@ export component MainWindow inherits Window {
                     width: 100%;
                     height: 100%;
                     border-radius: 24px;
-                    wallpaper_idx: root.wallpaper_idx;
+                    frost_image: root.dynamic_frost_image;
                     origin_x: (root.width - 760px) / 2;
                     origin_y: (root.height - 480px) / 2;
                     glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
@@ -1016,7 +1003,7 @@ export component MainWindow inherits Window {
                     width: 100%;
                     height: 100%;
                     border-radius: 24px;
-                    wallpaper_idx: root.wallpaper_idx;
+                    frost_image: root.dynamic_frost_image;
                     origin_x: (root.width - 760px) / 2;
                     origin_y: (root.height - 480px) / 2;
                     glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
