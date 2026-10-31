@@ -51,7 +51,7 @@ const APP_PACKAGES: [&str; 8] = [
     "android.settings.SETTINGS",
 ];
 
-const HDMI_IDS: [&str; 4] = ["hw1", "hw2", "hw3", "av"];
+const HDMI_IDS: [&str; 4] = ["hdmi1", "hdmi2", "hdmi3", "av"];
 const HDMI_LABELS: [&str; 4] = ["HDMI 1 · Mac", "HDMI 2", "HDMI 3", "AV"];
 const UTIL_LABELS: [&str; 4] = ["Art Mode", "All apps", "Inputs", "Settings"];
 
@@ -246,7 +246,8 @@ fn launch_tv_input(app: &slint::android::AndroidApp, input_id: &str) {
         };
         let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
 
-        let mut target_id = input_id.to_string();
+        let mut target_id = String::new();
+        let target_lower = input_id.to_lowercase();
         let tv_input_service = match env.new_string("tv_input") {
             Ok(s) => s,
             Err(_) => return,
@@ -259,26 +260,107 @@ fn launch_tv_input(app: &slint::android::AndroidApp, input_id: &str) {
                             if !list_obj.as_raw().is_null() {
                                 if let Ok(size_val) = env.call_method(&list_obj, "size", "()I", &[]) {
                                     let size = size_val.i().unwrap_or(0);
-                                    let target_lower = input_id.to_lowercase();
+
+                                    struct InputInfoItem {
+                                        id: String,
+                                        parent_id: String,
+                                        label: String,
+                                    }
+                                    let mut inputs: Vec<InputInfoItem> = Vec::new();
+
                                     for i in 0..size {
                                         if let Ok(item_val) = env.call_method(&list_obj, "get", "(I)Ljava/lang/Object;", &[i.into()]) {
                                             if let Ok(item_obj) = item_val.l() {
                                                 if let Ok(is_pt) = env.call_method(&item_obj, "isPassthroughInput", "()Z", &[]) {
                                                     if is_pt.z().unwrap_or(false) {
-                                                        if let Ok(id_val) = env.call_method(&item_obj, "getId", "()Ljava/lang/String;", &[]) {
+                                                        let id_rust = if let Ok(id_val) = env.call_method(&item_obj, "getId", "()Ljava/lang/String;", &[]) {
                                                             if let Ok(id_obj) = id_val.l() {
-                                                                if let Ok(id_str) = env.get_string(&jni::objects::JString::from(id_obj)) {
-                                                                    let id_rust = id_str.to_string_lossy().to_string();
-                                                                    let id_lower = id_rust.to_lowercase();
-                                                                    if id_lower.contains(&target_lower) || (target_lower == "hw1" && (id_lower.contains("hdmi1") || id_lower.contains("hw1"))) || (target_lower == "hw2" && (id_lower.contains("hdmi2") || id_lower.contains("hw2"))) || (target_lower == "hw3" && (id_lower.contains("hdmi3") || id_lower.contains("hw3"))) || (target_lower == "av" && id_lower.contains("av")) {
-                                                                        target_id = id_rust;
-                                                                        break;
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
+                                                                if !id_obj.as_raw().is_null() {
+                                                                    env.get_string(&jni::objects::JString::from(id_obj)).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                                                                } else { String::new() }
+                                                            } else { String::new() }
+                                                        } else { String::new() };
+
+                                                        let parent_rust = if let Ok(p_val) = env.call_method(&item_obj, "getParentId", "()Ljava/lang/String;", &[]) {
+                                                            if let Ok(p_obj) = p_val.l() {
+                                                                if !p_obj.as_raw().is_null() {
+                                                                    env.get_string(&jni::objects::JString::from(p_obj)).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                                                                } else { String::new() }
+                                                            } else { String::new() }
+                                                        } else { String::new() };
+
+                                                        let label_rust = if let Ok(l_val) = env.call_method(&item_obj, "loadLabel", "(Landroid/content/Context;)Ljava/lang/CharSequence;", &[(&activity).into()]) {
+                                                            if let Ok(l_obj) = l_val.l() {
+                                                                if !l_obj.as_raw().is_null() {
+                                                                    if let Ok(str_val) = env.call_method(&l_obj, "toString", "()Ljava/lang/String;", &[]) {
+                                                                        if let Ok(str_obj) = str_val.l() {
+                                                                            if !str_obj.as_raw().is_null() {
+                                                                                env.get_string(&jni::objects::JString::from(str_obj)).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                                                                            } else { String::new() }
+                                                                        } else { String::new() }
+                                                                    } else { String::new() }
+                                                                } else { String::new() }
+                                                            } else { String::new() }
+                                                        } else { String::new() };
+
+                                                        log::info!("TV input candidate: id='{}', parent='{}', label='{}'", id_rust, parent_rust, label_rust);
+                                                        inputs.push(InputInfoItem {
+                                                            id: id_rust,
+                                                            parent_id: parent_rust,
+                                                            label: label_rust,
+                                                        });
                                                     }
                                                 }
+                                            }
+                                        }
+                                    }
+
+                                    let is_hdmi1 = target_lower == "hdmi1" || target_lower == "hw1" || target_lower == "hdmi 1";
+                                    let is_hdmi2 = target_lower == "hdmi2" || target_lower == "hw2" || target_lower == "hdmi 2";
+                                    let is_hdmi3 = target_lower == "hdmi3" || target_lower == "hw3" || target_lower == "hdmi 3";
+                                    let is_av = target_lower == "av" || target_lower == "composite";
+
+                                    let mut matched_parent_id = String::new();
+                                    for item in &inputs {
+                                        let lbl = item.label.to_lowercase();
+                                        let id = item.id.to_lowercase();
+                                        if is_hdmi1 {
+                                            if lbl.contains("hdmi 1") || lbl == "hdmi1" || id.ends_with("/hw15") || id.ends_with("/hw1") || id.ends_with("/hdmi1") || id.contains("port1") || id.contains("port_1") {
+                                                matched_parent_id = item.id.clone();
+                                                break;
+                                            }
+                                        } else if is_hdmi2 {
+                                            if lbl.contains("hdmi 2") || lbl == "hdmi2" || id.ends_with("/hw16") || id.ends_with("/hw2") || id.ends_with("/hdmi2") || id.contains("port2") || id.contains("port_2") {
+                                                matched_parent_id = item.id.clone();
+                                                break;
+                                            }
+                                        } else if is_hdmi3 {
+                                            if lbl.contains("hdmi 3") || lbl == "hdmi3" || id.ends_with("/hw17") || id.ends_with("/hdmi3") || id.contains("port3") || id.contains("port_3") {
+                                                matched_parent_id = item.id.clone();
+                                                break;
+                                            }
+                                        } else if is_av {
+                                            if lbl.contains("av") || lbl.contains("composite") || id.ends_with("/hw3") || id.contains("composite") {
+                                                matched_parent_id = item.id.clone();
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if !matched_parent_id.is_empty() {
+                                        target_id = matched_parent_id.clone();
+                                        for item in &inputs {
+                                            if item.parent_id == matched_parent_id {
+                                                log::info!("Matched CEC child device for port {}: {}", matched_parent_id, item.id);
+                                                target_id = item.id.clone();
+                                                break;
+                                            }
+                                        }
+                                    } else if is_hdmi1 {
+                                        for item in &inputs {
+                                            if item.id.to_lowercase().contains("hdmi100004") || item.label.to_lowercase().contains("mac") {
+                                                target_id = item.id.clone();
+                                                break;
                                             }
                                         }
                                     }
@@ -288,6 +370,10 @@ fn launch_tv_input(app: &slint::android::AndroidApp, input_id: &str) {
                     }
                 }
             }
+        }
+
+        if target_id.is_empty() {
+            target_id = input_id.to_string();
         }
 
         let action = match env.new_string("android.intent.action.VIEW") {
@@ -1132,19 +1218,19 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                 win.set_detail_desc("Choose a connected HDMI port to switch passthrough source.".into());
                 let list = Rc::new(VecModel::default());
                 list.push(DetailOption {
-                    id: "hw1".into(),
+                    id: "hdmi1".into(),
                     title: "HDMI 1 · Mac".into(),
                     desc: "Connected · 4K 60Hz CEC Source".into(),
                     active: true,
                 });
                 list.push(DetailOption {
-                    id: "hw2".into(),
+                    id: "hdmi2".into(),
                     title: "HDMI 2".into(),
                     desc: "No signal · Passthrough port".into(),
                     active: false,
                 });
                 list.push(DetailOption {
-                    id: "hw3".into(),
+                    id: "hdmi3".into(),
                     title: "HDMI 3".into(),
                     desc: "Connected · Passthrough port".into(),
                     active: true,

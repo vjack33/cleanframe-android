@@ -395,9 +395,9 @@ export component MainWindow inherits Window {
         // --- HDMI INPUTS CAPSULE TRAY ---
         // ==========================================
         Rectangle {
-            x: (root.current_layout == "List") ? 530px : (root.width - 384px) / 2;
+            x: (root.current_layout == "List") ? 530px : (root.width - 392px) / 2;
             y: (root.current_layout == "List") ? 330px : 294px;
-            width: 384px;
+            width: 392px;
             height: 32px;
 
             // Glass Capsule Tray Body
@@ -421,13 +421,13 @@ export component MainWindow inherits Window {
 
             // Segments inside the tray
             for hdmi[h_idx] in root.inputs: Rectangle {
-                x: (h_idx == 0) ? 4px :
-                   (h_idx == 1) ? 122px :
-                   (h_idx == 2) ? 208px : 294px;
+                x: (h_idx == 0) ? 5px :
+                   (h_idx == 1) ? 139px :
+                   (h_idx == 2) ? 221px : 303px;
                 y: 3px;
-                width: (h_idx == 0) ? 114px :
-                       (h_idx == 1) ? 82px :
-                       (h_idx == 2) ? 82px : 82px;
+                width: (h_idx == 0) ? 130px :
+                       (h_idx == 1) ? 78px :
+                       (h_idx == 2) ? 78px : 84px;
                 height: 26px;
                 border-radius: 13px;
 
@@ -456,10 +456,10 @@ export component MainWindow inherits Window {
                     }
                 }
 
-                // LiveTV Icon
+                // LiveTV Icon - vertically centered
                 Image {
                     x: 8px;
-                    y: 6px;
+                    y: (parent.height - 14px) / 2;
                     width: 14px;
                     height: 14px;
                     image-fit: contain;
@@ -467,28 +467,32 @@ export component MainWindow inherits Window {
                     colorize: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : rgba(255, 255, 255, 0.75);
                 }
 
-                // HDMI Label
+                // HDMI Label - vertically centered with room for connected dot
                 Text {
-                    x: 26px;
-                    y: 5px;
+                    x: 25px;
+                    y: 0px;
+                    width: parent.width - 25px - 16px;
+                    height: parent.height;
+                    vertical-alignment: center;
                     text: hdmi.label;
                     font-size: 11px;
                     font-weight: (root.active_zone == "inputs" && root.selected_input == h_idx) ? 600 : 500;
                     color: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : #f6f1e7;
+                    overflow: elide;
                 }
 
-                // Status Dot (Apple iOS 26 systemGreen #34C759 with radiant aura)
+                // Status Dot - vertically centered
                 if hdmi.connected: Rectangle {
-                    x: parent.width - 14px;
-                    y: 8px;
+                    x: parent.width - 15px;
+                    y: (parent.height - 10px) / 2;
                     width: 10px;
                     height: 10px;
                     border-radius: 5px;
                     background: rgba(52, 199, 89, 0.28);
                 }
                 Rectangle {
-                    x: parent.width - 12px;
-                    y: 10px;
+                    x: parent.width - 13px;
+                    y: (parent.height - 6px) / 2;
                     width: 6px;
                     height: 6px;
                     border-radius: 3px;
@@ -611,9 +615,9 @@ export component MainWindow inherits Window {
 
                 Image {
                     x: 8px;
-                    y: 5px;
-                    width: 16px;
-                    height: 16px;
+                    y: (parent.height - 14px) / 2;
+                    width: 14px;
+                    height: 14px;
                     image-fit: contain;
                     source: (u_idx == 0) ? @image-url("assets/icons/art.svg") :
                             (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
@@ -623,8 +627,10 @@ export component MainWindow inherits Window {
                 }
 
                 Text {
-                    x: 28px;
-                    y: 5px;
+                    x: 26px;
+                    y: 0px;
+                    height: parent.height;
+                    vertical-alignment: center;
                     text: u;
                     font-size: 11px;
                     font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 500;
@@ -889,8 +895,10 @@ export component MainWindow inherits Window {
 
                     // Label & Value
                     Text {
-                        x: 16px;
-                        y: 5px;
+                        x: 18px;
+                        y: 4px;
+                        height: 18px;
+                        vertical-alignment: center;
                         text: s.label;
                         font-size: 14px;
                         font-weight: 600;
@@ -898,8 +906,10 @@ export component MainWindow inherits Window {
                     }
 
                     Text {
-                        x: 16px;
+                        x: 18px;
                         y: 21px;
+                        height: 15px;
+                        vertical-alignment: center;
                         text: s.value;
                         font-size: 11px;
                         font-weight: 400;
@@ -907,10 +917,12 @@ export component MainWindow inherits Window {
                     }
 
                     Text {
-                        x: parent.width - 24px;
-                        y: 10px;
+                        x: parent.width - 28px;
+                        y: 0px;
+                        height: parent.height;
+                        vertical-alignment: center;
                         text: "›";
-                        font-size: 16px;
+                        font-size: 18px;
                         font-weight: 600;
                         color: (root.selected_setting == s_idx) ? #111111 : rgba(255, 255, 255, 0.45);
                     }
@@ -1010,10 +1022,14 @@ export component MainWindow inherits Window {
                     border-color: (root.selected_detail_option == -1) ? #ffffff : rgba(255, 255, 255, 0.20);
 
                     Text {
-                        x: 12px;
-                        y: 5px;
+                        x: 0px;
+                        y: 0px;
+                        width: parent.width;
+                        height: parent.height;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
                         text: "‹ Settings";
-                        font-size: 13px;
+                        font-size: 12px;
                         font-weight: 600;
                         color: (root.selected_detail_option == -1) ? #111111 : #ffffff;
                     }
@@ -1066,10 +1082,10 @@ export component MainWindow inherits Window {
 
                         animate y { duration: 120ms; }
 
-                        // Radio indicator dot (Apple iOS 26 systemGreen #34C759)
+                        // Radio indicator dot (Apple iOS systemGreen #34C759)
                         Rectangle {
                             x: 16px;
-                            y: 16px;
+                            y: (parent.height - 12px) / 2;
                             width: 12px;
                             height: 12px;
                             border-radius: 6px;
@@ -1081,7 +1097,9 @@ export component MainWindow inherits Window {
                         // Option Title & Description
                         Text {
                             x: 38px;
-                            y: 5px;
+                            y: 4px;
+                            height: 18px;
+                            vertical-alignment: center;
                             text: opt.title;
                             font-size: 14px;
                             font-weight: 600;
@@ -1091,6 +1109,8 @@ export component MainWindow inherits Window {
                         Text {
                             x: 38px;
                             y: 22px;
+                            height: 16px;
+                            vertical-alignment: center;
                             text: opt.desc;
                             font-size: 11px;
                             font-weight: 400;
