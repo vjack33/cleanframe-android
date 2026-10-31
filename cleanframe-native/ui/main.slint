@@ -39,11 +39,6 @@ component LiquidGlassPanel inherits Rectangle {
     in property <bool> show_specular_hairline: false;
     in property <bool> show_left_rim: false;
 
-    // Soft drop shadow separating optical glass from wallpaper
-    drop-shadow-offset-y: 12px;
-    drop-shadow-blur: 28px;
-    drop-shadow-color: rgba(0, 0, 0, 0.40);
-
     // Inner Clipped Optical Glass Substrate
     Rectangle {
         width: 100%;
@@ -85,15 +80,6 @@ export component MainWindow inherits Window {
     in property <string> current_font: "Manrope"; // "Manrope" | "Newsreader" | "Geist"
     in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Obsidian Tint" | "Clear"
     in property <string> current_focus_style: "Glass Plate"; // "Glass Plate" | "Minimal Type"
-    in property <string> current_text_shadow: "Default"; // "Off" | "Subtle" | "Default" | "Strong"
-    in property <color> text_shadow_color: (root.current_text_shadow == "Off") ? rgba(0, 0, 0, 0.0) :
-                                           (root.current_text_shadow == "Subtle") ? rgba(0, 0, 0, 0.35) :
-                                           (root.current_text_shadow == "Strong") ? rgba(0, 0, 0, 0.90) :
-                                           rgba(0, 0, 0, 0.65);
-    in property <color> icon_shadow_color: (root.current_text_shadow == "Off") ? rgba(0, 0, 0, 0.0) :
-                                           (root.current_text_shadow == "Subtle") ? rgba(0, 0, 0, 0.30) :
-                                           (root.current_text_shadow == "Strong") ? rgba(0, 0, 0, 0.85) :
-                                           rgba(0, 0, 0, 0.55);
     in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
     in property <image> dynamic_frost_image;
     in property <image> dock_frost_image;
@@ -127,6 +113,125 @@ export component MainWindow inherits Window {
     // Active Navigation Zone: "apps" | "inputs" | "util" | "media"
     in property <string> active_zone: "apps";
 
+    // Dynamic Dual-Spring Liquid Morph & Physics (Apple Liquid Glass Model)
+    // Dock Apps Morph (Horizontal)
+    property <length> target_dock_x: root.selected_app * 144px + 6px;
+    property <length> dock_lead_x: target_dock_x;
+    animate dock_lead_x { duration: 190ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> dock_trail_x: target_dock_x;
+    animate dock_trail_x { duration: 320ms; easing: cubic-bezier(0.18, 1.55, 0.35, 1.0); }
+    property <length> dock_lead_diff: dock_lead_x - target_dock_x;
+    property <length> dock_trail_diff: dock_trail_x - target_dock_x;
+    property <length> dock_flow_dx: dock_lead_x - dock_trail_x;
+    property <length> dock_flow_abs: (dock_flow_dx > 0px) ? dock_flow_dx : -dock_flow_dx;
+    property <length> dock_overshoot_abs: (dock_trail_diff > 0px) ? dock_trail_diff : -dock_trail_diff;
+    property <length> anim_dock_x: (dock_lead_x + dock_trail_x) * 0.5;
+    property <length> dock_stretch_w: (dock_lead_diff == 0px && dock_trail_diff != 0px) ?
+        (-clamp(dock_overshoot_abs * 0.70, 0px, 14px)) :
+        clamp(dock_flow_abs * 0.52, 0px, 38px);
+    property <length> dock_squash_h: dock_stretch_w * 0.40;
+
+    // List Apps Morph (Vertical)
+    property <length> target_list_y: root.selected_app * 52px;
+    property <length> list_lead_y: target_list_y;
+    animate list_lead_y { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> list_trail_y: target_list_y;
+    animate list_trail_y { duration: 300ms; easing: cubic-bezier(0.18, 1.52, 0.35, 1.0); }
+    property <length> list_lead_diff: list_lead_y - target_list_y;
+    property <length> list_trail_diff: list_trail_y - target_list_y;
+    property <length> list_flow_dy: list_lead_y - list_trail_y;
+    property <length> list_flow_abs: (list_flow_dy > 0px) ? list_flow_dy : -list_flow_dy;
+    property <length> list_overshoot_abs: (list_trail_diff > 0px) ? list_trail_diff : -list_trail_diff;
+    property <length> anim_list_y: (list_lead_y + list_trail_y) * 0.5;
+    property <length> list_stretch_h: (list_lead_diff == 0px && list_trail_diff != 0px) ?
+        (-clamp(list_overshoot_abs * 0.65, 0px, 8px)) :
+        clamp(list_flow_abs * 0.45, 0px, 18px);
+    property <length> list_squash_w: list_stretch_h * 0.50;
+
+    // HDMI Inputs Tray Morph (Horizontal)
+    property <length> target_hdmi_x: (root.selected_input == 0) ? 5px :
+                                     (root.selected_input == 1) ? 139px :
+                                     (root.selected_input == 2) ? 221px : 303px;
+    property <length> target_hdmi_w: (root.selected_input == 0) ? 130px :
+                                     (root.selected_input == 1) ? 78px :
+                                     (root.selected_input == 2) ? 78px : 84px;
+    property <length> hdmi_lead_x: target_hdmi_x;
+    property <length> hdmi_lead_w: target_hdmi_w;
+    animate hdmi_lead_x, hdmi_lead_w { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> hdmi_trail_x: target_hdmi_x;
+    property <length> hdmi_trail_w: target_hdmi_w;
+    animate hdmi_trail_x, hdmi_trail_w { duration: 300ms; easing: cubic-bezier(0.18, 1.52, 0.35, 1.0); }
+    property <length> hdmi_lead_diff: hdmi_lead_x - target_hdmi_x;
+    property <length> hdmi_trail_diff: hdmi_trail_x - target_hdmi_x;
+    property <length> hdmi_flow_dx: hdmi_lead_x - hdmi_trail_x;
+    property <length> hdmi_flow_abs: (hdmi_flow_dx > 0px) ? hdmi_flow_dx : -hdmi_flow_dx;
+    property <length> hdmi_overshoot_abs: (hdmi_trail_diff > 0px) ? hdmi_trail_diff : -hdmi_trail_diff;
+    property <length> anim_hdmi_x: (hdmi_lead_x + hdmi_trail_x) * 0.5;
+    property <length> anim_hdmi_w: (hdmi_lead_w + hdmi_trail_w) * 0.5;
+    property <length> hdmi_stretch_w: (hdmi_lead_diff == 0px && hdmi_trail_diff != 0px) ?
+        (-clamp(hdmi_overshoot_abs * 0.60, 0px, 8px)) :
+        clamp(hdmi_flow_abs * 0.42, 0px, 22px);
+    property <length> hdmi_squash_h: hdmi_stretch_w * 0.38;
+
+    // Utilities Morph (Horizontal)
+    property <length> target_util_x: (root.selected_util == 0) ? 4px :
+                                     (root.selected_util == 1) ? 94px :
+                                     (root.selected_util == 2) ? 174px : 252px;
+    property <length> target_util_w: (root.selected_util == 0) ? 86px :
+                                     (root.selected_util == 1) ? 76px :
+                                     (root.selected_util == 2) ? 74px : 80px;
+    property <length> util_lead_x: target_util_x;
+    property <length> util_lead_w: target_util_w;
+    animate util_lead_x, util_lead_w { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> util_trail_x: target_util_x;
+    property <length> util_trail_w: target_util_w;
+    animate util_trail_x, util_trail_w { duration: 300ms; easing: cubic-bezier(0.18, 1.52, 0.35, 1.0); }
+    property <length> util_lead_diff: util_lead_x - target_util_x;
+    property <length> util_trail_diff: util_trail_x - target_util_x;
+    property <length> util_flow_dx: util_lead_x - util_trail_x;
+    property <length> util_flow_abs: (util_flow_dx > 0px) ? util_flow_dx : -util_flow_dx;
+    property <length> util_overshoot_abs: (util_trail_diff > 0px) ? util_trail_diff : -util_trail_diff;
+    property <length> anim_util_x: (util_lead_x + util_trail_x) * 0.5;
+    property <length> anim_util_w: (util_lead_w + util_trail_w) * 0.5;
+    property <length> util_stretch_w: (util_lead_diff == 0px && util_trail_diff != 0px) ?
+        (-clamp(util_overshoot_abs * 0.60, 0px, 8px)) :
+        clamp(util_flow_abs * 0.42, 0px, 20px);
+    property <length> util_squash_h: util_stretch_w * 0.38;
+
+    // Settings Categories Morph (Level 0, Vertical)
+    property <length> target_setting_y: root.selected_setting * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 164px);
+    property <length> setting_lead_y: target_setting_y;
+    animate setting_lead_y { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> setting_trail_y: target_setting_y;
+    animate setting_trail_y { duration: 290ms; easing: cubic-bezier(0.18, 1.48, 0.35, 1.0); }
+    property <length> setting_lead_diff: setting_lead_y - target_setting_y;
+    property <length> setting_trail_diff: setting_trail_y - target_setting_y;
+    property <length> setting_flow_dy: setting_lead_y - setting_trail_y;
+    property <length> setting_flow_abs: (setting_flow_dy > 0px) ? setting_flow_dy : -setting_flow_dy;
+    property <length> setting_overshoot_abs: (setting_trail_diff > 0px) ? setting_trail_diff : -setting_trail_diff;
+    property <length> anim_setting_y: (setting_lead_y + setting_trail_y) * 0.5;
+    property <length> setting_stretch_h: (setting_lead_diff == 0px && setting_trail_diff != 0px) ?
+        (-clamp(setting_overshoot_abs * 0.55, 0px, 7px)) :
+        clamp(setting_flow_abs * 0.40, 0px, 16px);
+    property <length> setting_squash_w: setting_stretch_h * 0.55;
+
+    // Settings Detail Morph (Level 1, Vertical)
+    property <length> target_detail_y: (root.selected_detail_option * 44px) - ((root.selected_detail_option > 5) ? (root.selected_detail_option - 5) * 44px : 0px);
+    property <length> detail_lead_y: target_detail_y;
+    animate detail_lead_y { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
+    property <length> detail_trail_y: target_detail_y;
+    animate detail_trail_y { duration: 290ms; easing: cubic-bezier(0.18, 1.48, 0.35, 1.0); }
+    property <length> detail_lead_diff: detail_lead_y - target_detail_y;
+    property <length> detail_trail_diff: detail_trail_y - target_detail_y;
+    property <length> detail_flow_dy: detail_lead_y - detail_trail_y;
+    property <length> detail_flow_abs: (detail_flow_dy > 0px) ? detail_flow_dy : -detail_flow_dy;
+    property <length> detail_overshoot_abs: (detail_trail_diff > 0px) ? detail_trail_diff : -detail_trail_diff;
+    property <length> anim_detail_y: (detail_lead_y + detail_trail_y) * 0.5;
+    property <length> detail_stretch_h: (detail_lead_diff == 0px && detail_trail_diff != 0px) ?
+        (-clamp(detail_overshoot_abs * 0.55, 0px, 7px)) :
+        clamp(detail_flow_abs * 0.40, 0px, 16px);
+    property <length> detail_squash_w: detail_stretch_h * 0.55;
+
     // Now Playing State (Default false, matches webview on TV when no media active)
     in property <bool> now_playing_visible: false;
     in property <string> now_playing_title: "CleanFrame Ambient";
@@ -147,14 +252,13 @@ export component MainWindow inherits Window {
     in property <int> selected_setting: 0;
     in property <int> selected_detail_option: 0;
 
-    // 12 Settings Overview Items (With Text Shadow, Optical Blur & Liquid Glass Refraction)
+    // 11 Settings Overview Items (With Optical Blur & Liquid Glass Refraction)
     in property <[SettingItem]> settings_list: [
         { id: "background", label: "Background", value: "Bridge at dusk" },
         { id: "layout", label: "Layout", value: "Dock" },
         { id: "blur", label: "Optical blur", value: "Default" },
         { id: "refraction", label: "Glass refraction", value: "Default" },
         { id: "typography", label: "Typography", value: "Manrope" },
-        { id: "shadow", label: "Text shadow", value: "Default" },
         { id: "icons", label: "Icon pack", value: "CleanFrame default" },
         { id: "focus", label: "Focus style", value: "Glass Plate" },
         { id: "material", label: "Glass material", value: "Frost" },
@@ -236,16 +340,6 @@ export component MainWindow inherits Window {
         width: 100%;
         height: 100%;
 
-        // Clock Drop Shadow
-        Text {
-            x: (root.current_layout == "Dock") ? 57px : (root.width - self.width - 55px);
-            y: 37px;
-            text: root.clock_text;
-            font-size: 46px;
-            font-weight: 500;
-            color: root.text_shadow_color;
-        }
-
         Text {
             x: (root.current_layout == "Dock") ? 56px : (root.width - self.width - 56px);
             y: 36px;
@@ -253,16 +347,6 @@ export component MainWindow inherits Window {
             font-size: 46px;
             font-weight: 500;
             color: #ffffff;
-        }
-
-        // Caption Drop Shadow
-        Text {
-            x: (root.current_layout == "Dock") ? 57px : (root.width - self.width - 55px);
-            y: 93px;
-            text: root.focused_caption;
-            font-size: 19px;
-            font-weight: 500;
-            color: root.text_shadow_color;
         }
 
         Text {
@@ -289,51 +373,60 @@ export component MainWindow inherits Window {
             width: 420px;
             height: 440px;
 
+            // Liquid Frosted Glass Selection Capsule (Morphing & Jiggling - Pure Liquid Lens)
+            if (root.current_focus_style == "Glass Plate"): Rectangle {
+                x: root.list_squash_w * 0.5;
+                y: root.anim_list_y - root.list_stretch_h * 0.5;
+                width: 260px - root.list_squash_w;
+                height: 48px + root.list_stretch_h;
+                border-radius: (48px + root.list_stretch_h) / 2;
+                clip: true;
+                opacity: (root.active_zone == "apps") ? 1.0 : 0.0;
+
+                animate opacity { duration: 160ms; easing: ease-out; }
+
+                // 1. Co-located Optical Refracted Wallpaper
+                Image {
+                    x: -(56px + root.list_squash_w * 0.5);
+                    y: -(74px + root.anim_list_y - root.list_stretch_h * 0.5);
+                    width: root.width;
+                    height: root.height;
+                    image-fit: cover;
+                    source: root.dynamic_frost_image;
+                }
+
+                // 2. Optical Glass Tone Lift (Pure Clear Glass, NO Color Tint)
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(255, 255, 255, 0.08);
+                }
+
+                // 3. Convex Sheen
+                Rectangle {
+                    x: 4px;
+                    y: 1px;
+                    width: parent.width - 8px;
+                    height: parent.height * 0.45;
+                    border-radius: parent.border-radius - 1px;
+                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.0) 100%);
+                }
+
+                // 4. Specular Hairline Glint (no painted perimeter stroke border)
+                Rectangle {
+                    x: 10px;
+                    y: 1px;
+                    width: parent.width - 20px;
+                    height: 1px;
+                    border-radius: 0.5px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.40) 50%, rgba(255, 255, 255, 0.0) 100%);
+                }
+            }
+
             for app[i] in root.apps: Rectangle {
                 y: i * 52px;
                 width: 320px;
                 height: 48px;
-
-                // Focus pill (Liquid Frosted Glass Capsule with Specular Highlight)
-                if (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
-                    x: 0px;
-                    y: 0px;
-                    width: 260px;
-                    height: 48px;
-
-                    LiquidGlassPanel {
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 24px;
-                        frost_image: root.dynamic_frost_image;
-                        origin_x: 56px;
-                        origin_y: 74px + i * 52px;
-                        glass_tint: (root.current_material == "Obsidian Tint") ?
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.12) 0%, rgba(14, 18, 24, 0.70) 100%) :
-                            (root.current_material == "Frost") ?
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(240, 245, 250, 0.22) 48%, rgba(255, 255, 255, 0.35) 100%) :
-                            (root.current_material == "Clear") ?
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 100%) :
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(18, 22, 28, 0.35) 100%);
-                        rim_color: rgba(255, 255, 255, 0.75);
-                        rim_width: 1.2px;
-                        show_specular_hairline: true;
-                        show_left_rim: false;
-                    }
-                }
-
-                // App Brand Icon Drop Shadow
-                Image {
-                    x: 15px;
-                    y: ((root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 9px : 11px) + 1px;
-                    width: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
-                    height: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
-                    image-fit: contain;
-                    source: app.icon;
-                    colorize: root.icon_shadow_color;
-
-                    animate y, width, height { duration: 140ms; }
-                }
 
                 // App Brand Icon
                 Image {
@@ -348,20 +441,7 @@ export component MainWindow inherits Window {
                         ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
                         (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.92)));
 
-                    animate y, width, height { duration: 140ms; }
-                }
-
-                // App Name Drop Shadow
-                Text {
-                    x: 53px;
-                    y: ((root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 7px : 9px) + 1px;
-                    text: app.name;
-                    font-size: (root.active_zone == "apps" && root.selected_app == i) ?
-                        (root.current_focus_style == "Minimal Type" ? 28px : 26px) : 24px;
-                    font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
-                    color: root.text_shadow_color;
-
-                    animate font-size { duration: 140ms; }
+                    animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                 }
 
                 // App Name
@@ -375,7 +455,7 @@ export component MainWindow inherits Window {
                     color: (root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
                         (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.92));
 
-                    animate font-size { duration: 140ms; }
+                    animate y, font-size { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                 }
             }
         }
@@ -428,7 +508,57 @@ export component MainWindow inherits Window {
                     width: 1152px;
                     height: 100px;
 
-                    animate x { duration: 160ms; }
+                    animate x { duration: 280ms; easing: cubic-bezier(0.25, 1.25, 0.5, 1.0); }
+
+                    // Liquid Glass Droplet Focus Container (Pure Refraction Lens - matching liquid-rust)
+                    if (root.current_focus_style == "Glass Plate"): Rectangle {
+                        x: root.anim_dock_x - root.dock_stretch_w * 0.5;
+                        y: 4px + root.dock_squash_h * 0.5;
+                        width: 132px + root.dock_stretch_w;
+                        height: 92px - root.dock_squash_h;
+                        border-radius: 20px;
+                        clip: true;
+                        opacity: (root.active_zone == "apps") ? 1.0 : 0.0;
+
+                        animate opacity { duration: 160ms; easing: ease-out; }
+
+                        // 1. Co-located Optical Refracted Wallpaper (Snell Refraction & Diffusion)
+                        Image {
+                            x: -((root.width - 752px) / 2 + 8px - clamp((root.selected_app - 2) * 144px, 0px, 432px) + (root.anim_dock_x - root.dock_stretch_w * 0.5));
+                            y: -(350px + root.dock_squash_h * 0.5);
+                            width: root.width;
+                            height: root.height;
+                            image-fit: cover;
+                            source: root.dynamic_frost_image;
+                        }
+
+                        // 2. Optical Glass Tone Lift (Apple Kit Tone: Pure Clear Glass, NO Color Tint)
+                        Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(255, 255, 255, 0.08);
+                        }
+
+                        // 3. Convex Squircle Meniscus Sheen (Top Arch Light Reflection)
+                        Rectangle {
+                            x: 4px;
+                            y: 2px;
+                            width: parent.width - 8px;
+                            height: parent.height * 0.45;
+                            border-radius: parent.border-radius - 2px;
+                            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+
+                        // 4. Specular Rim Glint (Fine Highlight along Top Curved Bevel)
+                        Rectangle {
+                            x: 12px;
+                            y: 1px;
+                            width: parent.width - 24px;
+                            height: 1.5px;
+                            border-radius: 0.75px;
+                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.40) 50%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+                    }
 
                     for app[i] in root.apps: Rectangle {
                         x: i * 144px;
@@ -436,40 +566,6 @@ export component MainWindow inherits Window {
                         width: 144px;
                         height: 100px;
                         border-radius: 16px;
-
-                        // Focused Tile Liquid Glass Plate
-                        if (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
-                            x: 6px;
-                            y: 4px;
-                            width: parent.width - 12px;
-                            height: parent.height - 8px;
-
-                            // Plate Luminous Frosted Glass Body (No borders)
-                            Rectangle {
-                                width: 100%;
-                                height: 100%;
-                                border-radius: 18px;
-                                background: (root.current_material == "Obsidian Tint") ?
-                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 48%, rgba(255, 255, 255, 0.18) 100%) :
-                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.34) 0%, rgba(235, 242, 250, 0.14) 48%, rgba(255, 255, 255, 0.24) 100%);
-                            }
-                        }
-
-                        // App Brand Icon Drop Shadow
-                        Image {
-                            x: (parent.width - self.width) / 2 + 1px;
-                            y: ((root.active_zone == "apps" && root.selected_app == i) ?
-                                (root.current_focus_style == "Minimal Type" ? 14px : 18px) : 20px) + 1px;
-                            width: (root.active_zone == "apps" && root.selected_app == i) ?
-                                (root.current_focus_style == "Minimal Type" ? 40px : 34px) : 30px;
-                            height: (root.active_zone == "apps" && root.selected_app == i) ?
-                                (root.current_focus_style == "Minimal Type" ? 40px : 34px) : 30px;
-                            image-fit: contain;
-                            source: app.icon;
-                            colorize: root.icon_shadow_color;
-
-                            animate y, width, height { duration: 140ms; }
-                        }
 
                         // App Brand Icon
                         Image {
@@ -486,21 +582,7 @@ export component MainWindow inherits Window {
                                 #ffffff :
                                 (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.90));
 
-                            animate y, width, height { duration: 140ms; }
-                        }
-
-                        // App Label Drop Shadow
-                        Text {
-                            x: 5px;
-                            y: ((root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 64px : 62px) + 1px;
-                            width: parent.width - 8px;
-                            horizontal-alignment: center;
-                            text: app.name;
-                            font-size: (root.active_zone == "apps" && root.selected_app == i) ?
-                                (root.current_focus_style == "Minimal Type" ? 14px : 13px) : 12px;
-                            font-weight: (root.active_zone == "apps" && root.selected_app == i) ? 700 : 500;
-                            color: root.text_shadow_color;
-                            overflow: elide;
+                            animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                         }
 
                         // App Label
@@ -517,6 +599,8 @@ export component MainWindow inherits Window {
                                 #ffffff :
                                 (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.92));
                             overflow: elide;
+
+                            animate y { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                         }
                     }
                 }
@@ -553,6 +637,56 @@ export component MainWindow inherits Window {
                 show_left_rim: false;
             }
 
+            // Liquid Glass Selection Pill (Morphing & Jiggling - Pure Liquid Lens)
+            Rectangle {
+                x: root.anim_hdmi_x - root.hdmi_stretch_w * 0.5;
+                y: 3px + root.hdmi_squash_h * 0.5;
+                width: root.anim_hdmi_w + root.hdmi_stretch_w;
+                height: 26px - root.hdmi_squash_h;
+                border-radius: (26px - root.hdmi_squash_h) / 2;
+                clip: true;
+                opacity: (root.active_zone == "inputs") ? 1.0 : 0.0;
+
+                animate opacity { duration: 160ms; easing: ease-out; }
+
+                // 1. Co-located Optical Refracted Wallpaper
+                Image {
+                    x: -(((root.current_layout == "List") ? 530px : (root.width - 392px) / 2) + (root.anim_hdmi_x - root.hdmi_stretch_w * 0.5));
+                    y: -(((root.current_layout == "List") ? 330px : 294px) + 3px + root.hdmi_squash_h * 0.5);
+                    width: root.width;
+                    height: root.height;
+                    image-fit: cover;
+                    source: root.dynamic_frost_image;
+                }
+
+                // 2. Optical Glass Tone Lift (Pure Clear Glass, NO Color Tint)
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(255, 255, 255, 0.10);
+                }
+
+                // 3. Convex Sheen
+                Rectangle {
+                    x: 3px;
+                    y: 1px;
+                    width: parent.width - 6px;
+                    height: parent.height * 0.45;
+                    border-radius: parent.border-radius - 1px;
+                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                }
+
+                // 4. Specular Hairline Glint (no painted perimeter stroke border)
+                Rectangle {
+                    x: 6px;
+                    y: 1px;
+                    width: parent.width - 12px;
+                    height: 1px;
+                    border-radius: 0.5px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
+                }
+            }
+
             // Segments inside the tray
             for hdmi[h_idx] in root.inputs: Rectangle {
                 x: (h_idx == 0) ? 5px :
@@ -565,31 +699,6 @@ export component MainWindow inherits Window {
                 height: 26px;
                 border-radius: 13px;
 
-                // Focused Segment Luminous Liquid Glass Pill
-                if (root.active_zone == "inputs" && root.selected_input == h_idx): Rectangle {
-                    width: 100%;
-                    height: 100%;
-
-                    // Body (No borders)
-                    Rectangle {
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 13px;
-                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.45) 0%, rgba(230, 235, 245, 0.22) 48%, rgba(255, 255, 255, 0.30) 100%);
-                    }
-                }
-
-                // LiveTV Icon Drop Shadow
-                Image {
-                    x: 9px;
-                    y: (parent.height - 14px) / 2 + 1px;
-                    width: 14px;
-                    height: 14px;
-                    image-fit: contain;
-                    source: @image-url("assets/icons/livetv.svg");
-                    colorize: root.icon_shadow_color;
-                }
-
                 // LiveTV Icon - vertically centered
                 Image {
                     x: 8px;
@@ -599,20 +708,8 @@ export component MainWindow inherits Window {
                     image-fit: contain;
                     source: @image-url("assets/icons/livetv.svg");
                     colorize: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : rgba(255, 255, 255, 0.88);
-                }
 
-                // HDMI Label Drop Shadow
-                Text {
-                    x: 26px;
-                    y: 1px;
-                    width: parent.width - 25px - 16px;
-                    height: parent.height;
-                    vertical-alignment: center;
-                    text: hdmi.label;
-                    font-size: 11px;
-                    font-weight: (root.active_zone == "inputs" && root.selected_input == h_idx) ? 600 : 500;
-                    color: root.text_shadow_color;
-                    overflow: elide;
+                    animate y, width, height { duration: 220ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                 }
 
                 // HDMI Label - vertically centered with room for connected dot
@@ -659,30 +756,25 @@ export component MainWindow inherits Window {
             width: 180px;
             height: 140px;
 
+            // Continuous Sliding Focus Pill (Morphing)
+            Rectangle {
+                x: 0px;
+                y: root.anim_util_x; // in list mode, selected_util * 32px
+                width: 180px;
+                height: 28px;
+                border-radius: 14px;
+                opacity: (root.active_zone == "util") ? 1.0 : 0.0;
+                background: @linear-gradient(165deg, rgba(255, 255, 255, 0.40) 0%, rgba(255, 255, 255, 0.18) 100%);
+
+                animate y { duration: 240ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
+                animate opacity { duration: 160ms; }
+            }
+
             for u[u_idx] in root.utils: Rectangle {
                 y: u_idx * 32px;
                 width: 180px;
                 height: 28px;
                 border-radius: 14px;
-
-                if (root.active_zone == "util" && root.selected_util == u_idx): Rectangle {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 14px;
-                    background: @linear-gradient(165deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.16) 100%);
-                }
-
-                // Text Drop Shadow
-                Text {
-                    x: 1px;
-                    y: 6px;
-                    width: 148px;
-                    horizontal-alignment: right;
-                    text: u;
-                    font-size: 15px;
-                    font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 400;
-                    color: root.text_shadow_color;
-                }
 
                 Text {
                     x: 0px;
@@ -693,20 +785,6 @@ export component MainWindow inherits Window {
                     font-size: 15px;
                     font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 400;
                     color: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(255, 255, 255, 0.85);
-                }
-
-                // Image Drop Shadow
-                Image {
-                    x: 157px;
-                    y: 6px;
-                    width: 18px;
-                    height: 18px;
-                    image-fit: contain;
-                    source: (u_idx == 0) ? @image-url("assets/icons/art.svg") :
-                            (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
-                            (u_idx == 2) ? @image-url("assets/icons/quickpanel.svg") :
-                            @image-url("assets/icons/settings.svg");
-                    colorize: root.icon_shadow_color;
                 }
 
                 Image {
@@ -752,6 +830,56 @@ export component MainWindow inherits Window {
                 show_left_rim: false;
             }
 
+            // Liquid Glass Selection Pill (Morphing & Jiggling - Pure Liquid Lens)
+            Rectangle {
+                x: root.anim_util_x - root.util_stretch_w * 0.5;
+                y: 3px + root.util_squash_h * 0.5;
+                width: root.anim_util_w + root.util_stretch_w;
+                height: 26px - root.util_squash_h;
+                border-radius: (26px - root.util_squash_h) / 2;
+                clip: true;
+                opacity: (root.active_zone == "util") ? 1.0 : 0.0;
+
+                animate opacity { duration: 160ms; easing: ease-out; }
+
+                // 1. Co-located Optical Refracted Wallpaper
+                Image {
+                    x: -((root.width - 396px) + (root.anim_util_x - root.util_stretch_w * 0.5));
+                    y: -(39px + root.util_squash_h * 0.5);
+                    width: root.width;
+                    height: root.height;
+                    image-fit: cover;
+                    source: root.dynamic_frost_image;
+                }
+
+                // 2. Optical Glass Tone Lift (Pure Clear Glass, NO Color Tint)
+                Rectangle {
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(255, 255, 255, 0.10);
+                }
+
+                // 3. Convex Sheen
+                Rectangle {
+                    x: 3px;
+                    y: 1px;
+                    width: parent.width - 6px;
+                    height: parent.height * 0.45;
+                    border-radius: parent.border-radius - 1px;
+                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                }
+
+                // 4. Specular Hairline Glint (no painted perimeter stroke border)
+                Rectangle {
+                    x: 6px;
+                    y: 1px;
+                    width: parent.width - 12px;
+                    height: 1px;
+                    border-radius: 0.5px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
+                }
+            }
+
             for u[u_idx] in root.utils: Rectangle {
                 x: (u_idx == 0) ? 4px :
                    (u_idx == 1) ? 94px :
@@ -762,34 +890,6 @@ export component MainWindow inherits Window {
                        (u_idx == 2) ? 74px : 80px;
                 height: 26px;
                 border-radius: 13px;
-
-                // Focused Luminous Liquid Glass Pill
-                if (root.active_zone == "util" && root.selected_util == u_idx): Rectangle {
-                    width: 100%;
-                    height: 100%;
-
-                    // Body (No borders)
-                    Rectangle {
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 13px;
-                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.45) 0%, rgba(230, 235, 245, 0.22) 48%, rgba(255, 255, 255, 0.30) 100%);
-                    }
-                }
-
-                // Icon Drop Shadow
-                Image {
-                    x: 9px;
-                    y: (parent.height - 14px) / 2 + 1px;
-                    width: 14px;
-                    height: 14px;
-                    image-fit: contain;
-                    source: (u_idx == 0) ? @image-url("assets/icons/art.svg") :
-                            (u_idx == 1) ? @image-url("assets/icons/apps.svg") :
-                            (u_idx == 2) ? @image-url("assets/icons/livetv.svg") :
-                            @image-url("assets/icons/settings.svg");
-                    colorize: root.icon_shadow_color;
-                }
 
                 Image {
                     x: 8px;
@@ -802,18 +902,8 @@ export component MainWindow inherits Window {
                             (u_idx == 2) ? @image-url("assets/icons/livetv.svg") :
                             @image-url("assets/icons/settings.svg");
                     colorize: (root.active_zone == "util" && root.selected_util == u_idx) ? #ffffff : rgba(246, 241, 231, 0.90);
-                }
 
-                // Text Drop Shadow
-                Text {
-                    x: 27px;
-                    y: 1px;
-                    height: parent.height;
-                    vertical-alignment: center;
-                    text: u;
-                    font-size: 11px;
-                    font-weight: (root.active_zone == "util" && root.selected_util == u_idx) ? 600 : 500;
-                    color: root.text_shadow_color;
+                    animate y, width, height { duration: 220ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                 }
 
                 Text {
@@ -1046,6 +1136,53 @@ export component MainWindow inherits Window {
                     height: 384px;
                     clip: true;
 
+                    // Liquid Glass Selection Plate (Morphing & Jiggling - Pure Liquid Lens)
+                    Rectangle {
+                        x: root.setting_squash_w * 0.5;
+                        y: root.anim_setting_y - root.setting_stretch_h * 0.5;
+                        width: parent.width - root.setting_squash_w;
+                        height: 38px + root.setting_stretch_h;
+                        border-radius: 10px;
+                        clip: true;
+
+                        // 1. Co-located Optical Refracted Wallpaper
+                        Image {
+                            x: -(60px + root.setting_squash_w * 0.5);
+                            y: -(84px + root.anim_setting_y - root.setting_stretch_h * 0.5);
+                            width: root.width;
+                            height: root.height;
+                            image-fit: cover;
+                            source: root.dynamic_frost_image;
+                        }
+
+                        // 2. Optical Glass Tone Lift (Pure Clear Glass, NO milky tint)
+                        Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(255, 255, 255, 0.12);
+                        }
+
+                        // 3. Convex Top Specular Sheen
+                        Rectangle {
+                            x: 4px;
+                            y: 1px;
+                            width: parent.width - 8px;
+                            height: parent.height * 0.45;
+                            border-radius: 8px;
+                            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+
+                        // 4. Specular Hairline Glint (zero stroke border)
+                        Rectangle {
+                            x: 8px;
+                            y: 1px;
+                            width: parent.width - 16px;
+                            height: 1px;
+                            border-radius: 0.5px;
+                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+                    }
+
                     for s[s_idx] in root.settings_list: Rectangle {
                         x: 0px;
                         y: s_idx * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 164px);
@@ -1053,15 +1190,7 @@ export component MainWindow inherits Window {
                         height: 38px;
                         border-radius: 10px;
 
-                        animate y { duration: 120ms; }
-
-                        // Focused elevated luminous plate
-                        if (root.selected_setting == s_idx): Rectangle {
-                            width: 100%;
-                            height: 100%;
-                            border-radius: 10px;
-                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                        }
+                        animate y { duration: 240ms; easing: cubic-bezier(0.25, 1.25, 0.5, 1.0); }
 
                         // Label & Value
                         Text {
@@ -1072,7 +1201,7 @@ export component MainWindow inherits Window {
                             text: s.label;
                             font-size: 13px;
                             font-weight: 600;
-                            color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
+                            color: #ffffff;
                         }
 
                         Text {
@@ -1083,7 +1212,7 @@ export component MainWindow inherits Window {
                             text: s.value;
                             font-size: 10px;
                             font-weight: 400;
-                            color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.88);
+                            color: (root.selected_setting == s_idx) ? rgba(255, 255, 255, 0.95) : rgba(246, 241, 231, 0.70);
                         }
 
                         Text {
@@ -1096,7 +1225,7 @@ export component MainWindow inherits Window {
                             text: "›";
                             font-size: 16px;
                             font-weight: 600;
-                            color: (root.selected_setting == s_idx) ? #111111 : rgba(246, 241, 231, 0.40);
+                            color: (root.selected_setting == s_idx) ? #ffffff : rgba(246, 241, 231, 0.40);
                         }
                     }
                 }
@@ -1144,16 +1273,43 @@ export component MainWindow inherits Window {
                 width: 100%;
                 height: 100%;
 
-                // Back Button
+                // Back Button (Pure Liquid Glass Capsule)
                 Rectangle {
                     x: 20px;
                     y: 16px;
                     width: 96px;
                     height: 26px;
                     border-radius: 13px;
-                    background: (root.selected_detail_option == -1) ?
-                        @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%) :
-                        rgba(255, 255, 255, 0.12);
+                    clip: true;
+
+                    // Co-located Frosted Wallpaper
+                    Image {
+                        x: -64px;
+                        y: -44px;
+                        width: root.width;
+                        height: root.height;
+                        image-fit: cover;
+                        source: root.dynamic_frost_image;
+                    }
+
+                    // Optical Tone Lift
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: (root.selected_detail_option == -1) ?
+                            rgba(255, 255, 255, 0.22) :
+                            rgba(255, 255, 255, 0.08);
+                    }
+
+                    // Top Sheen
+                    if (root.selected_detail_option == -1): Rectangle {
+                        x: 2px;
+                        y: 1px;
+                        width: parent.width - 4px;
+                        height: parent.height * 0.45;
+                        border-radius: 11px;
+                        background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                    }
 
                     Text {
                         x: 0px;
@@ -1165,7 +1321,7 @@ export component MainWindow inherits Window {
                         text: "‹ Settings";
                         font-size: 11px;
                         font-weight: 600;
-                        color: (root.selected_detail_option == -1) ? #111111 : #ffffff;
+                        color: #ffffff;
                     }
                 }
 
@@ -1199,6 +1355,53 @@ export component MainWindow inherits Window {
                     height: 336px;
                     clip: true;
 
+                    // Liquid Glass Selection Plate (Morphing & Jiggling - Pure Liquid Lens)
+                    if (root.selected_detail_option >= 0): Rectangle {
+                        x: root.detail_squash_w * 0.5;
+                        y: root.anim_detail_y - root.detail_stretch_h * 0.5;
+                        width: parent.width - root.detail_squash_w;
+                        height: 40px + root.detail_stretch_h;
+                        border-radius: 10px;
+                        clip: true;
+
+                        // 1. Co-located Optical Refracted Wallpaper
+                        Image {
+                            x: -(60px + root.detail_squash_w * 0.5);
+                            y: -(134px + root.anim_detail_y - root.detail_stretch_h * 0.5);
+                            width: root.width;
+                            height: root.height;
+                            image-fit: cover;
+                            source: root.dynamic_frost_image;
+                        }
+
+                        // 2. Optical Glass Tone Lift (Pure Clear Glass, NO milky tint)
+                        Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(255, 255, 255, 0.12);
+                        }
+
+                        // 3. Convex Top Specular Sheen
+                        Rectangle {
+                            x: 4px;
+                            y: 1px;
+                            width: parent.width - 8px;
+                            height: parent.height * 0.45;
+                            border-radius: 8px;
+                            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+
+                        // 4. Specular Hairline Glint (zero stroke border)
+                        Rectangle {
+                            x: 8px;
+                            y: 1px;
+                            width: parent.width - 16px;
+                            height: 1px;
+                            border-radius: 0.5px;
+                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
+                        }
+                    }
+
                     for opt[o_idx] in root.detail_options: Rectangle {
                         x: 0px;
                         y: (o_idx * 44px) - ((root.selected_detail_option > 5) ? (root.selected_detail_option - 5) * 44px : 0px);
@@ -1206,15 +1409,7 @@ export component MainWindow inherits Window {
                         height: 40px;
                         border-radius: 10px;
 
-                        animate y { duration: 120ms; }
-
-                        // Focused plate
-                        if (root.selected_detail_option == o_idx): Rectangle {
-                            width: 100%;
-                            height: 100%;
-                            border-radius: 10px;
-                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                        }
+                        animate y { duration: 240ms; easing: cubic-bezier(0.25, 1.25, 0.5, 1.0); }
 
                         // Radio indicator dot
                         Rectangle {
@@ -1223,7 +1418,7 @@ export component MainWindow inherits Window {
                             width: 10px;
                             height: 10px;
                             border-radius: 5px;
-                            background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #34C759) : rgba(255, 255, 255, 0.25);
+                            background: opt.active ? #34C759 : rgba(255, 255, 255, 0.25);
                         }
 
                         // Option Title & Description
@@ -1235,7 +1430,7 @@ export component MainWindow inherits Window {
                             text: opt.title;
                             font-size: 12px;
                             font-weight: 600;
-                            color: (root.selected_detail_option == o_idx) ? #111111 : #ffffff;
+                            color: #ffffff;
                         }
 
                         Text {
@@ -1246,7 +1441,7 @@ export component MainWindow inherits Window {
                             text: opt.desc;
                             font-size: 10px;
                             font-weight: 400;
-                            color: (root.selected_detail_option == o_idx) ? #444444 : rgba(246, 241, 231, 0.88);
+                            color: (root.selected_detail_option == o_idx) ? rgba(255, 255, 255, 0.95) : rgba(246, 241, 231, 0.70);
                         }
                     }
                 }
@@ -1316,9 +1511,6 @@ export component MainWindow inherits Window {
                 height: 256.5px;
                 border-radius: 16px;
                 clip: true;
-                drop-shadow-offset-y: 12px;
-                drop-shadow-blur: 28px;
-                drop-shadow-color: rgba(0, 0, 0, 0.50);
 
                 // 1. Wallpaper Image
                 Image {
@@ -1360,28 +1552,12 @@ export component MainWindow inherits Window {
 
                 // Preview Clock & Caption (Top-Left)
                 Text {
-                    x: 27px;
-                    y: 17px;
-                    text: root.clock_text;
-                    font-size: 21px;
-                    font-weight: 500;
-                    color: root.text_shadow_color;
-                }
-                Text {
                     x: 26px;
                     y: 16px;
                     text: root.clock_text;
                     font-size: 21px;
                     font-weight: 500;
                     color: #ffffff;
-                }
-                Text {
-                    x: 27px;
-                    y: 43px;
-                    text: root.focused_caption;
-                    font-size: 10px;
-                    font-weight: 500;
-                    color: root.text_shadow_color;
                 }
                 Text {
                     x: 26px;
@@ -1400,9 +1576,6 @@ export component MainWindow inherits Window {
                     height: 18px;
                     border-radius: 9px;
                     clip: true;
-                    drop-shadow-offset-y: 6px;
-                    drop-shadow-blur: 14px;
-                    drop-shadow-color: rgba(0, 0, 0, 0.35);
 
                     Image {
                         x: -(parent.x);
@@ -1419,16 +1592,6 @@ export component MainWindow inherits Window {
                                     (root.current_material == "Frost") ? rgba(14, 18, 24, 0.68) :
                                     (root.current_material == "Clear") ? rgba(12, 16, 22, 0.48) :
                                     rgba(14, 18, 24, 0.60);
-                    }
-                    Text {
-                        x: 0px;
-                        y: 4px;
-                        width: parent.width;
-                        horizontal-alignment: center;
-                        text: "Art Mode · All apps · Inputs · Settings";
-                        font-size: 7px;
-                        font-weight: 500;
-                        color: root.text_shadow_color;
                     }
                     Text {
                         x: 0px;
@@ -1450,9 +1613,6 @@ export component MainWindow inherits Window {
                     height: 16px;
                     border-radius: 8px;
                     clip: true;
-                    drop-shadow-offset-y: 6px;
-                    drop-shadow-blur: 14px;
-                    drop-shadow-color: rgba(0, 0, 0, 0.35);
 
                     Image {
                         x: -(parent.x);
@@ -1469,16 +1629,6 @@ export component MainWindow inherits Window {
                                     (root.current_material == "Frost") ? rgba(14, 18, 24, 0.68) :
                                     (root.current_material == "Clear") ? rgba(12, 16, 22, 0.48) :
                                     rgba(14, 18, 24, 0.60);
-                    }
-                    Text {
-                        x: 0px;
-                        y: 4px;
-                        width: parent.width;
-                        horizontal-alignment: center;
-                        text: "HDMI 1 · Mac   HDMI 2   HDMI 3   AV";
-                        font-size: 8px;
-                        font-weight: 500;
-                        color: root.text_shadow_color;
                     }
                     Text {
                         x: 0px;
@@ -1500,9 +1650,6 @@ export component MainWindow inherits Window {
                     height: 55px;
                     border-radius: 12px;
                     clip: true;
-                    drop-shadow-offset-y: 8px;
-                    drop-shadow-blur: 18px;
-                    drop-shadow-color: rgba(0, 0, 0, 0.40);
 
                     // 1:1 Co-located Optical Glass Refraction Image
                     Image {
@@ -1527,6 +1674,20 @@ export component MainWindow inherits Window {
                             @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 25%, rgba(18, 22, 28, 0.45) 65%, rgba(10, 14, 18, 0.62) 100%);
                     }
 
+                    // Mini continuous sliding focus plate
+                    if (root.current_focus_style == "Glass Plate"): Rectangle {
+                        x: 6px + root.selected_app * 43px;
+                        y: 4px;
+                        width: 40px;
+                        height: 47px;
+                        border-radius: 8px;
+                        background: (root.current_material == "Obsidian Tint") ?
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.10) 48%, rgba(255, 255, 255, 0.20) 100%) :
+                            @linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, rgba(235, 242, 250, 0.16) 48%, rgba(255, 255, 255, 0.22) 100%);
+
+                        animate x { duration: 260ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
+                    }
+
                     // Mini carousel apps
                     for app[i] in root.apps: Rectangle {
                         x: 6px + i * 43px;
@@ -1535,16 +1696,6 @@ export component MainWindow inherits Window {
                         height: 47px;
                         border-radius: 8px;
 
-                        // Focused plate
-                        if (root.selected_app == i && root.current_focus_style == "Glass Plate"): Rectangle {
-                            width: 100%;
-                            height: 100%;
-                            border-radius: 8px;
-                            background: (root.current_material == "Obsidian Tint") ?
-                                @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.10) 48%, rgba(255, 255, 255, 0.20) 100%) :
-                                @linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, rgba(235, 242, 250, 0.16) 48%, rgba(255, 255, 255, 0.22) 100%);
-                        }
-
                         Image {
                             x: (parent.width - self.width) / 2;
                             y: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 6px : 8px;
@@ -1552,19 +1703,6 @@ export component MainWindow inherits Window {
                             height: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 18px : 16px;
                             image-fit: contain;
                             source: app.icon;
-                        }
-
-                        // Label Drop Shadow
-                        Text {
-                            x: 0px;
-                            y: 29px;
-                            width: parent.width;
-                            horizontal-alignment: center;
-                            text: app.name;
-                            font-size: (root.selected_app == i && root.current_focus_style == "Minimal Type") ? 8px : 7px;
-                            font-weight: (root.selected_app == i) ? 700 : 500;
-                            color: root.text_shadow_color;
-                            overflow: elide;
                         }
 
                         Text {

@@ -1,6 +1,7 @@
 slint::include_modules!();
 
 mod blur;
+mod display4k;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -100,14 +101,6 @@ pub const REFRACTION_LEVEL_DESCS: [&str; 4] = [
 ];
 pub const REFRACTION_DISTANCES: [f32; 4] = [0.0, 14.0, 28.0, 48.0];
 
-pub const TEXT_SHADOW_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
-pub const TEXT_SHADOW_DESCS: [&str; 4] = [
-    "No drop shadows · Pure unshaded typography directly over wallpaper",
-    "Subtle soft ambient shadow · Gentle legibility enhancement (35% alpha)",
-    "Default balanced contrast shadow · Crisp readability on most backgrounds (65% alpha)",
-    "Strong high-contrast shadow · Deep protective halo for bright snow and sun wallpapers (90% alpha)",
-];
-
 #[derive(Default)]
 pub struct AppState {
     pub active_zone: &'static str, // "apps" | "inputs" | "util" | "media"
@@ -124,7 +117,6 @@ pub struct AppState {
     pub refraction_level: usize, // 0..3 (default: 2)
     pub layout_mode: &'static str,
     pub typography: &'static str,
-    pub text_shadow: &'static str, // "Off" | "Subtle" | "Default" | "Strong"
     pub material: &'static str,
     pub focus_style: &'static str,
     pub icon_pack: &'static str,
@@ -660,11 +652,14 @@ fn android_main(app: slint::android::AndroidApp) {
             .with_max_level(log::LevelFilter::Info)
             .with_tag("CleanFrameNative"),
     );
-    log::info!("CleanFrame Native Rust starting on Android TV...");
+    log::info!("CleanFrame Native Rust starting on Android TV (4K Ultra HD mode enabled)...");
+
+    let display_info = display4k::configure_4k_display(&app);
 
     slint::android::init(app.clone()).expect("Failed to initialize Slint on Android");
 
     let main_window = MainWindow::new().expect("Failed to create MainWindow");
+    display4k::enforce_4k_surface(&app, main_window.window(), &display_info);
     let state = Rc::new(RefCell::new(AppState {
         active_zone: "apps",
         selected_app: 3, // Default to Prime Video (matching reference screenshot)
@@ -680,7 +675,6 @@ fn android_main(app: slint::android::AndroidApp) {
         refraction_level: 2, // Default (displacement 6.5px)
         layout_mode: "Dock", // Dock default (matching real TV webview)
         typography: "Manrope",
-        text_shadow: "Default",
         material: "Frost",
         focus_style: "Glass Plate",
         icon_pack: "CleanFrame default",
@@ -723,6 +717,23 @@ fn android_main(app: slint::android::AndroidApp) {
                     let display_hours = if hours == 0 { 12 } else { hours };
                     let minutes = ((now + 1800) / 60) % 60;
                     win.set_clock_text(format!("{}:{:02}", display_hours, minutes).into());
+                }
+            },
+        );
+    }
+
+    // 4K Surface Verification Timer (Every 500ms)
+    let surface_timer = slint::Timer::default();
+    {
+        let window_weak = main_window.as_weak();
+        let app_handle_timer = app_handle.clone();
+        let disp_info = display_info;
+        surface_timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_millis(500),
+            move || {
+                if let Some(win) = window_weak.upgrade() {
+                    display4k::enforce_4k_surface(&app_handle_timer, win.window(), &disp_info);
                 }
             },
         );
@@ -1062,23 +1073,14 @@ fn open_settings_detail(s: &mut AppState) {
             };
         }
         5 => {
-            s.current_group = "shadow";
-            s.selected_detail_option = match s.text_shadow {
-                "Off" => 0,
-                "Subtle" => 1,
-                "Default" => 2,
-                _ => 3, // "Strong"
-            };
-        }
-        6 => {
             s.current_group = "icons";
             s.selected_detail_option = if s.icon_pack == "CleanFrame default" { 0 } else { 1 };
         }
-        7 => {
+        6 => {
             s.current_group = "focus";
             s.selected_detail_option = if s.focus_style == "Minimal Type" { 1 } else { 0 };
         }
-        8 => {
+        7 => {
             s.current_group = "material";
             s.selected_detail_option = match s.material {
                 "Frost" => 0,
@@ -1087,15 +1089,15 @@ fn open_settings_detail(s: &mut AppState) {
                 _ => 3, // "Clear"
             };
         }
-        9 => {
+        8 => {
             s.current_group = "inputs";
             s.selected_detail_option = 0;
         }
-        10 => {
+        9 => {
             s.current_group = "editor";
             s.selected_detail_option = 0;
         }
-        11 => {
+        10 => {
             s.current_group = "samsung";
             s.selected_detail_option = 0;
         }
@@ -1113,7 +1115,6 @@ fn get_detail_options_len(group: &str) -> usize {
         "blur" => BLUR_LEVEL_NAMES.len(),
         "refraction" => REFRACTION_LEVEL_NAMES.len(),
         "typography" => 3,
-        "shadow" => TEXT_SHADOW_NAMES.len(),
         "icons" => 2,
         "focus" => 2,
         "material" => 4,
@@ -1151,14 +1152,6 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
                 0 => "Manrope",
                 1 => "Newsreader",
                 _ => "Geist",
-            };
-        }
-        "shadow" => {
-            s.text_shadow = match s.selected_detail_option {
-                0 => "Off",
-                1 => "Subtle",
-                2 => "Default",
-                _ => "Strong",
             };
         }
         "icons" => {
@@ -1210,7 +1203,6 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_dock_frost_image(dock_frost);
     win.set_current_layout(s.layout_mode.into());
     win.set_current_font(s.typography.into());
-    win.set_current_text_shadow(s.text_shadow.into());
     win.set_current_material(s.material.into());
     win.set_current_focus_style(s.focus_style.into());
     win.set_current_icon_pack(s.icon_pack.into());
@@ -1235,7 +1227,7 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     };
     win.set_focused_caption(caption_text.into());
 
-    // Update settings overview readout values (10 rows)
+    // Update settings overview readout values (11 rows)
     let settings = win.get_settings_list();
     if let Some(mut r) = settings.row_data(0) {
         if s.wallpaper_idx < WALLPAPERS.len() {
@@ -1260,32 +1252,28 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
         settings.set_row_data(4, r);
     }
     if let Some(mut r) = settings.row_data(5) {
-        r.value = s.text_shadow.into();
+        r.value = s.icon_pack.into();
         settings.set_row_data(5, r);
     }
     if let Some(mut r) = settings.row_data(6) {
-        r.value = s.icon_pack.into();
+        r.value = s.focus_style.into();
         settings.set_row_data(6, r);
     }
     if let Some(mut r) = settings.row_data(7) {
-        r.value = s.focus_style.into();
+        r.value = s.material.into();
         settings.set_row_data(7, r);
     }
     if let Some(mut r) = settings.row_data(8) {
-        r.value = s.material.into();
+        r.value = "Device dependent".into();
         settings.set_row_data(8, r);
     }
     if let Some(mut r) = settings.row_data(9) {
-        r.value = "Device dependent".into();
+        r.value = "8 apps".into();
         settings.set_row_data(9, r);
     }
     if let Some(mut r) = settings.row_data(10) {
-        r.value = "8 apps".into();
-        settings.set_row_data(10, r);
-    }
-    if let Some(mut r) = settings.row_data(11) {
         r.value = "Home and TV settings".into();
-        settings.set_row_data(11, r);
+        settings.set_row_data(10, r);
     }
 
     // Update Detail Submenu Options
@@ -1373,20 +1361,6 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                     desc: "Precise modernist architectural grotesque".into(),
                     active: s.typography == "Geist",
                 });
-                win.set_detail_options(list.into());
-            }
-            "shadow" => {
-                win.set_detail_title("Text Shadow".into());
-                win.set_detail_desc("Configure legibility drop shadows behind typography on floating glass & wallpapers.".into());
-                let list = Rc::new(VecModel::default());
-                for (idx, &name) in TEXT_SHADOW_NAMES.iter().enumerate() {
-                    list.push(DetailOption {
-                        id: name.to_lowercase().into(),
-                        title: name.into(),
-                        desc: TEXT_SHADOW_DESCS[idx].into(),
-                        active: s.text_shadow == name,
-                    });
-                }
                 win.set_detail_options(list.into());
             }
             "icons" => {
