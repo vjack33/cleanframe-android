@@ -2,6 +2,7 @@
 
 #[cfg(target_os = "android")]
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 pub struct DisplayInfo4K {
     pub is_4k_panel: bool,
     pub width: i32,
@@ -11,8 +12,9 @@ pub struct DisplayInfo4K {
 
 #[cfg(target_os = "android")]
 pub fn configure_4k_display(app: &slint::android::AndroidApp) -> DisplayInfo4K {
-    // Check if the physical display panel is 4K
     let mut is_4k_panel = false;
+    let mut real_w = 1920;
+    let mut real_h = 1080;
 
     unsafe {
         let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
@@ -27,6 +29,7 @@ pub fn configure_4k_display(app: &slint::android::AndroidApp) -> DisplayInfo4K {
                                 if let Ok(wm) = wm_val.l() {
                                     if let Ok(disp_val) = env.call_method(&wm, "getDefaultDisplay", "()Landroid/view/Display;", &[]) {
                                         if let Ok(display) = disp_val.l() {
+                                            // Query physical display modes
                                             if let Ok(modes_val) = env.call_method(&display, "getSupportedModes", "()[Landroid/view/Display$Mode;", &[]) {
                                                 if let Ok(modes_obj) = modes_val.l() {
                                                     let modes_array: &jni::objects::JObjectArray = (&modes_obj).into();
@@ -44,6 +47,22 @@ pub fn configure_4k_display(app: &slint::android::AndroidApp) -> DisplayInfo4K {
                                                     }
                                                 }
                                             }
+
+                                            // Query active real display size
+                                            if let Ok(point_cls) = env.find_class("android/graphics/Point") {
+                                                if let Ok(point) = env.new_object(&point_cls, "()V", &[]) {
+                                                    if env.call_method(&display, "getRealSize", "(Landroid/graphics/Point;)V", &[(&point).into()]).is_ok() {
+                                                        if let (Ok(x), Ok(y)) = (env.get_field(&point, "x", "I"), env.get_field(&point, "y", "I")) {
+                                                            let px = x.i().unwrap_or(1920);
+                                                            let py = y.i().unwrap_or(1080);
+                                                            if px > 0 && py > 0 {
+                                                                real_w = px;
+                                                                real_h = py;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -55,17 +74,20 @@ pub fn configure_4k_display(app: &slint::android::AndroidApp) -> DisplayInfo4K {
         }
     }
 
-    // Android TV limits the graphics compositor plane via `ro.surface_flinger.max_graphics_width = 1920`.
-    // The TV hardware composer then scales this 1080p graphics buffer to the 4K panel at 60 FPS.
-    // Setting buffer geometry to 1920x1080 with scale_factor 2.0 ensures 1:1 hardware mapping
-    // with zero transformation crop or letterbox scaling.
-    let (target_w, target_h, scale_factor) = (1920, 1080, 2.0f32);
+    // Auto-detect resolution:
+    // If the device window compositor supports native 4K (e.g. 4K emulator or unlocked TV), use 3840x2160 @ scale 4.0.
+    // If the device compositor is 1080p (e.g. standard Android TV BSP with max_graphics_width = 1920), use 1920x1080 @ scale 2.0.
+    let (target_w, target_h, scale_factor) = if real_w >= 3840 && real_h >= 2160 {
+        (3840, 2160, 4.0f32)
+    } else {
+        (1920, 1080, 2.0f32)
+    };
 
     if let Some(w) = app.native_window() {
         let res = w.set_buffers_geometry(target_w, target_h, None);
         log::info!(
-            "CleanFrame Display: Target {}x{} buffer set: {:?}. Physical 4K panel: {}",
-            target_w, target_h, res, is_4k_panel
+            "CleanFrame Display: Target {}x{} buffer set: {:?}. Real size: {}x{}, Physical 4K panel: {}",
+            target_w, target_h, res, real_w, real_h, is_4k_panel
         );
     }
 
