@@ -27,6 +27,93 @@ export struct DetailOption {
     active: bool,
 }
 
+component LiquidGlassPanel inherits Rectangle {
+    in property <int> wallpaper_idx: 3;
+    in property <length> scene_width: 960px;
+    in property <length> scene_height: 540px;
+    in property <length> origin_x: 0px;
+    in property <length> origin_y: 0px;
+    in property <brush> glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 32%, rgba(18, 24, 32, 0.28) 72%, rgba(12, 16, 22, 0.45) 100%);
+    in property <color> rim_color: rgba(255, 255, 255, 0.35);
+    in property <length> rim_width: 1.2px;
+    in property <bool> show_specular_hairline: true;
+    in property <bool> show_left_rim: false;
+
+    // Drop shadow separating optical glass from wallpaper
+    drop-shadow-offset-y: 10px;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: rgba(0, 0, 0, 0.38);
+
+    // Inner Clipped Optical Glass Substrate
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: root.border-radius;
+        clip: true;
+
+        // 1:1 Co-located blurred wallpaper
+        Image {
+            x: -root.origin_x;
+            y: -root.origin_y;
+            width: root.scene_width;
+            height: root.scene_height;
+            image-fit: cover;
+            source: (root.wallpaper_idx == 0) ? @image-url("assets/materials/misty-field-frost.jpg") :
+                    (root.wallpaper_idx == 1) ? @image-url("assets/materials/cove-field-frost.jpg") :
+                    (root.wallpaper_idx == 2) ? @image-url("assets/materials/forest-field-frost.jpg") :
+                    (root.wallpaper_idx == 3) ? @image-url("assets/materials/valley-field-frost.jpg") :
+                    (root.wallpaper_idx == 4) ? @image-url("assets/materials/night-field-frost.jpg") :
+                    (root.wallpaper_idx == 5) ? @image-url("assets/materials/peaks-field-frost.jpg") :
+                    (root.wallpaper_idx == 6) ? @image-url("assets/materials/bridge-field-frost.jpg") :
+                    (root.wallpaper_idx == 7) ? @image-url("assets/materials/ridge-field-frost.jpg") :
+                    (root.wallpaper_idx == 8) ? @image-url("assets/materials/golden-field-frost.jpg") :
+                    (root.wallpaper_idx == 9) ? @image-url("assets/materials/summit-field-frost.jpg") :
+                    (root.wallpaper_idx == 10) ? @image-url("assets/materials/goldcoast-field-frost.jpg") :
+                    (root.wallpaper_idx == 11) ? @image-url("assets/materials/sydney-field-frost.jpg") :
+                    (root.wallpaper_idx == 12) ? @image-url("assets/materials/amber-field-frost.jpg") :
+                    (root.wallpaper_idx == 13) ? @image-url("assets/materials/mint-field-frost.jpg") :
+                    @image-url("assets/materials/alpine-field-frost.jpg");
+        }
+
+        // Luminous Glass Body Tint & Perimeter Rim
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            border-radius: root.border-radius;
+            background: root.glass_tint;
+            border-width: root.rim_width;
+            border-color: root.rim_color;
+        }
+
+        // Top Specular Hairline (Overhead light catch)
+        if root.show_specular_hairline: Rectangle {
+            x: 20px;
+            y: 1px;
+            width: parent.width - 40px;
+            height: 1.25px;
+            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.50) 20%, rgba(255, 255, 255, 0.88) 50%, rgba(255, 255, 255, 0.50) 80%, rgba(255, 255, 255, 0.0) 100%);
+        }
+
+        // Left Specular Rim (Directional light sweep)
+        if root.show_left_rim: Rectangle {
+            x: 1px;
+            y: 16px;
+            width: 1px;
+            height: parent.height - 32px;
+            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.08) 100%);
+        }
+
+        // Bottom subtle edge burn
+        Rectangle {
+            x: 32px;
+            y: parent.height - 2px;
+            width: parent.width - 64px;
+            height: 1px;
+            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.0) 100%);
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     width: 960px;
     height: 540px;
@@ -213,25 +300,20 @@ export component MainWindow inherits Window {
                     width: 260px;
                     height: 48px;
 
-                    // Liquid frosted glass capsule body
-                    Rectangle {
-                        width: parent.width;
-                        height: parent.height;
+                    LiquidGlassPanel {
+                        width: 100%;
+                        height: 100%;
                         border-radius: 24px;
-                        background: (root.current_focus_style == "Minimal Pill") ?
+                        wallpaper_idx: root.wallpaper_idx;
+                        origin_x: 56px;
+                        origin_y: 74px + i * 52px;
+                        glass_tint: (root.current_focus_style == "Minimal Pill") ?
                             rgba(255, 255, 255, 0.28) :
                             @linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(240, 245, 250, 0.22) 48%, rgba(255, 255, 255, 0.35) 100%);
-                        border-width: 1.2px;
-                        border-color: rgba(255, 255, 255, 0.75);
-
-                        // Inset top specular highlight
-                        if (root.current_focus_style == "Glass, Soft"): Rectangle {
-                            x: 16px;
-                            y: 1px;
-                            width: parent.width - 32px;
-                            height: 1.2px;
-                            background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, #ffffff 50%, rgba(255, 255, 255, 0.0) 100%);
-                        }
+                        rim_color: rgba(255, 255, 255, 0.75);
+                        rim_width: 1.2px;
+                        show_specular_hairline: (root.current_focus_style == "Glass, Soft");
+                        show_left_rim: false;
                     }
                 }
 
@@ -271,44 +353,22 @@ export component MainWindow inherits Window {
             height: 116px;
 
             // Liquid Glass Backdrop Mat
-            Rectangle {
+            LiquidGlassPanel {
                 width: 100%;
                 height: 100%;
                 border-radius: 26px;
-                background: (root.current_material == "Clear tint") ?
-                    @linear-gradient(145deg, rgba(255, 255, 255, 0.18) 0%, rgba(153, 153, 153, 0.05) 26%, rgba(20, 26, 32, 0.58) 65%, rgba(10, 14, 18, 0.82) 100%) :
+                wallpaper_idx: root.wallpaper_idx;
+                origin_x: (root.width - 752px) / 2;
+                origin_y: 338px;
+                glass_tint: (root.current_material == "Clear tint") ?
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 30%, rgba(18, 24, 32, 0.22) 70%, rgba(10, 14, 20, 0.36) 100%) :
                     (root.current_material == "Soft") ?
-                    @linear-gradient(145deg, rgba(255, 255, 255, 0.22) 0%, rgba(160, 160, 160, 0.08) 26%, rgba(24, 30, 38, 0.48) 65%, rgba(14, 18, 24, 0.70) 100%) :
-                    @linear-gradient(145deg, rgba(255, 255, 255, 0.20) 0%, rgba(153, 153, 153, 0.07) 26%, rgba(18, 22, 28, 0.52) 65%, rgba(12, 16, 22, 0.75) 100%);
-                border-width: 1.25px;
-                border-color: rgba(255, 255, 255, 0.26);
-
-                // Top Specular Inset Rim Highlight (inner hairline + dodge highlight)
-                Rectangle {
-                    x: 24px;
-                    y: 1px;
-                    width: parent.width - 48px;
-                    height: 1.25px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.42) 20%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0.42) 80%, rgba(255, 255, 255, 0.0) 100%);
-                }
-
-                // Left specular edge highlight (directional light sweep)
-                Rectangle {
-                    x: 1px;
-                    y: 20px;
-                    width: 1px;
-                    height: parent.height - 40px;
-                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.08) 100%);
-                }
-
-                // Bottom subtle edge burn (darkened hairline edge)
-                Rectangle {
-                    x: 32px;
-                    y: parent.height - 2px;
-                    width: parent.width - 64px;
-                    height: 1px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.0) 100%);
-                }
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 30%, rgba(24, 30, 38, 0.28) 70%, rgba(14, 18, 24, 0.42) 100%) :
+                    @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 30%, rgba(18, 22, 28, 0.25) 70%, rgba(12, 16, 22, 0.40) 100%);
+                rim_color: rgba(255, 255, 255, 0.34);
+                rim_width: 1.25px;
+                show_specular_hairline: true;
+                show_left_rim: true;
             }
 
             // Sliding Carousel Track
@@ -401,22 +461,18 @@ export component MainWindow inherits Window {
             height: 32px;
 
             // Glass Capsule Tray Body
-            Rectangle {
+            LiquidGlassPanel {
                 width: 100%;
                 height: 100%;
                 border-radius: 16px;
-                background: @linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(18, 24, 30, 0.52) 100%);
-                border-width: 1px;
-                border-color: rgba(255, 255, 255, 0.24);
-
-                // Inset top specular line
-                Rectangle {
-                    x: 14px;
-                    y: 1px;
-                    width: parent.width - 28px;
-                    height: 1px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.0) 100%);
-                }
+                wallpaper_idx: root.wallpaper_idx;
+                origin_x: (root.current_layout == "List") ? 530px : (root.width - 392px) / 2;
+                origin_y: (root.current_layout == "List") ? 330px : 294px;
+                glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 24, 30, 0.32) 100%);
+                rim_color: rgba(255, 255, 255, 0.32);
+                rim_width: 1px;
+                show_specular_hairline: true;
+                show_left_rim: false;
             }
 
             // Segments inside the tray
@@ -560,22 +616,18 @@ export component MainWindow inherits Window {
             height: 32px;
 
             // Glass Island Body
-            Rectangle {
+            LiquidGlassPanel {
                 width: 100%;
                 height: 100%;
                 border-radius: 16px;
-                background: @linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(18, 22, 26, 0.50) 100%);
-                border-width: 1px;
-                border-color: rgba(255, 255, 255, 0.20);
-
-                // Inset specular line
-                Rectangle {
-                    x: 14px;
-                    y: 1px;
-                    width: parent.width - 28px;
-                    height: 1px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.40) 50%, rgba(255, 255, 255, 0.0) 100%);
-                }
+                wallpaper_idx: root.wallpaper_idx;
+                origin_x: root.width - 396px;
+                origin_y: 36px;
+                glass_tint: @linear-gradient(165deg, rgba(255, 255, 255, 0.20) 0%, rgba(18, 22, 26, 0.30) 100%);
+                rim_color: rgba(255, 255, 255, 0.32);
+                rim_width: 1px;
+                show_specular_hairline: true;
+                show_left_rim: false;
             }
 
             for u[u_idx] in root.utils: Rectangle {
@@ -647,22 +699,21 @@ export component MainWindow inherits Window {
             y: (root.current_layout == "List") ? 284px : 252px;
             width: 230px;
             height: 36px;
-            border-radius: 18px;
-            // CSS ref: .now-playing.is-compact { background: rgba(18,22,25,.75); border: 1px solid rgba(255,255,255,.18);
-            //          box-shadow: 0 14px 40px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.22) }
-            background: (root.active_zone == "media") ?
-                @linear-gradient(170deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.16) 58%, rgba(255, 255, 255, 0.22) 100%) :
-                @linear-gradient(180deg, rgba(18, 22, 25, 0.75) 0%, rgba(12, 16, 20, 0.80) 100%);
-            border-width: 1px;
-            border-color: (root.active_zone == "media") ? rgba(255, 255, 255, 0.34) : rgba(255, 255, 255, 0.18);
 
-            // Inset top specular highlight
-            Rectangle {
-                x: 12px;
-                y: 1px;
-                width: parent.width - 24px;
-                height: 1px;
-                background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.0) 100%);
+            LiquidGlassPanel {
+                width: 100%;
+                height: 100%;
+                border-radius: 18px;
+                wallpaper_idx: root.wallpaper_idx;
+                origin_x: (root.current_layout == "List") ? 540px : (root.width - 230px) / 2;
+                origin_y: (root.current_layout == "List") ? 284px : 252px;
+                glass_tint: (root.active_zone == "media") ?
+                    @linear-gradient(170deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.16) 58%, rgba(255, 255, 255, 0.22) 100%) :
+                    @linear-gradient(180deg, rgba(18, 22, 25, 0.75) 0%, rgba(12, 16, 20, 0.80) 100%);
+                rim_color: (root.active_zone == "media") ? rgba(255, 255, 255, 0.35) : rgba(255, 255, 255, 0.18);
+                rim_width: 1px;
+                show_specular_hairline: true;
+                show_left_rim: false;
             }
 
             // Music note icon
@@ -724,23 +775,18 @@ export component MainWindow inherits Window {
             width: 440px;
             height: 80px;
 
-            // Liquid glass body
-            Rectangle {
-                width: parent.width;
-                height: parent.height;
+            LiquidGlassPanel {
+                width: 100%;
+                height: 100%;
                 border-radius: 20px;
-                background: @linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(18, 22, 28, 0.58) 70%, rgba(10, 14, 18, 0.78) 100%);
-                border-width: 1.2px;
-                border-color: rgba(255, 255, 255, 0.28);
-
-                // Top laser specular line
-                Rectangle {
-                    x: 16px;
-                    y: 1px;
-                    width: parent.width - 32px;
-                    height: 1.2px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0.0) 100%);
-                }
+                wallpaper_idx: root.wallpaper_idx;
+                origin_x: 56px;
+                origin_y: root.height - 130px;
+                glass_tint: @linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(18, 22, 28, 0.58) 70%, rgba(10, 14, 18, 0.78) 100%);
+                rim_color: rgba(255, 255, 255, 0.28);
+                rim_width: 1.2px;
+                show_specular_hairline: true;
+                show_left_rim: true;
             }
 
             Text {
@@ -799,8 +845,8 @@ export component MainWindow inherits Window {
     if root.settings_open: Rectangle {
         width: 100%;
         height: 100%;
-        // Darkened glass veil allowing ambient room/wallpaper to breathe through
-        background: rgba(6, 10, 14, 0.65);
+        // Subtle ambient veil allowing wallpaper depth to breathe through
+        background: rgba(6, 10, 14, 0.40);
 
         // LEVEL 0: SETTINGS OVERVIEW LIST
         if !root.settings_detail: Rectangle {
@@ -814,32 +860,18 @@ export component MainWindow inherits Window {
                 width: 760px;
                 height: 480px;
 
-                // Liquid glass body
-                Rectangle {
+                LiquidGlassPanel {
                     width: 100%;
                     height: 100%;
                     border-radius: 24px;
-                    background: @linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(18, 22, 28, 0.62) 70%, rgba(10, 14, 18, 0.82) 100%);
-                    border-width: 1.2px;
-                    border-color: rgba(255, 255, 255, 0.28);
-
-                    // Top specular highlight line
-                    Rectangle {
-                        x: 24px;
-                        y: 1px;
-                        width: parent.width - 48px;
-                        height: 1.2px;
-                        background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.60) 50%, rgba(255, 255, 255, 0.0) 100%);
-                    }
-
-                    // Left specular highlight line
-                    Rectangle {
-                        x: 1px;
-                        y: 20px;
-                        width: 1px;
-                        height: parent.height - 40px;
-                        background: @linear-gradient(180deg, rgba(255, 255, 255, 0.40) 0%, rgba(255, 255, 255, 0.10) 100%);
-                    }
+                    wallpaper_idx: root.wallpaper_idx;
+                    origin_x: (root.width - 760px) / 2;
+                    origin_y: (root.height - 480px) / 2;
+                    glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
+                    rim_color: rgba(255, 255, 255, 0.35);
+                    rim_width: 1.2px;
+                    show_specular_hairline: true;
+                    show_left_rim: true;
                 }
 
                 // Title
@@ -980,32 +1012,18 @@ export component MainWindow inherits Window {
                 width: 760px;
                 height: 480px;
 
-                // Liquid glass body
-                Rectangle {
+                LiquidGlassPanel {
                     width: 100%;
                     height: 100%;
                     border-radius: 24px;
-                    background: @linear-gradient(145deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 35%, rgba(18, 22, 28, 0.62) 70%, rgba(10, 14, 18, 0.82) 100%);
-                    border-width: 1.2px;
-                    border-color: rgba(255, 255, 255, 0.28);
-
-                    // Top specular highlight line
-                    Rectangle {
-                        x: 24px;
-                        y: 1px;
-                        width: parent.width - 48px;
-                        height: 1.2px;
-                        background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.60) 50%, rgba(255, 255, 255, 0.0) 100%);
-                    }
-
-                    // Left specular highlight line
-                    Rectangle {
-                        x: 1px;
-                        y: 20px;
-                        width: 1px;
-                        height: parent.height - 40px;
-                        background: @linear-gradient(180deg, rgba(255, 255, 255, 0.40) 0%, rgba(255, 255, 255, 0.10) 100%);
-                    }
+                    wallpaper_idx: root.wallpaper_idx;
+                    origin_x: (root.width - 760px) / 2;
+                    origin_y: (root.height - 480px) / 2;
+                    glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
+                    rim_color: rgba(255, 255, 255, 0.35);
+                    rim_width: 1.2px;
+                    show_specular_hairline: true;
+                    show_left_rim: true;
                 }
 
                 // Back Button Glass Pill (‹ Settings)
