@@ -82,6 +82,24 @@ const HDMI_IDS: [&str; 4] = ["hdmi1", "hdmi2", "hdmi3", "av"];
 const HDMI_LABELS: [&str; 4] = ["HDMI 1 · Mac", "HDMI 2", "HDMI 3", "AV"];
 const UTIL_LABELS: [&str; 4] = ["Art Mode", "All apps", "Inputs", "Settings"];
 
+pub const BLUR_LEVEL_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
+pub const BLUR_LEVEL_DESCS: [&str; 4] = [
+    "No blur · Completely transparent clear glass",
+    "Subtle diffusion · Light frost (radius 8)",
+    "Default diffusion · Balanced optical frost (radius 20)",
+    "Strong diffusion · Deep frosted glass (radius 35)",
+];
+pub const BLUR_RADII: [usize; 4] = [0, 8, 20, 35];
+
+pub const REFRACTION_LEVEL_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
+pub const REFRACTION_LEVEL_DESCS: [&str; 4] = [
+    "No refraction · Flat borderless glass",
+    "Subtle curvature · Gentle optical bevel bend (3.2px)",
+    "Default curvature · Balanced crown glass lens bevel (6.5px)",
+    "Strong curvature · Pronounced liquid glass rim warping (11.0px)",
+];
+pub const REFRACTION_DISTANCES: [f32; 4] = [0.0, 3.2, 6.5, 11.0];
+
 #[derive(Default)]
 pub struct AppState {
     pub active_zone: &'static str, // "apps" | "inputs" | "util" | "media"
@@ -94,6 +112,8 @@ pub struct AppState {
     pub settings_detail: bool,
     pub current_group: &'static str,
     pub wallpaper_idx: usize,
+    pub blur_level: usize, // 0..3 (default: 2)
+    pub refraction_level: usize, // 0..3 (default: 2)
     pub layout_mode: &'static str,
     pub typography: &'static str,
     pub material: &'static str,
@@ -119,7 +139,9 @@ impl AppState {
         } else {
             WALLPAPER_THUMBS[0]
         };
-        if let Some(pair) = blur::blur_wallpaper_bytes_pair(bytes) {
+        let radius = BLUR_RADII[self.blur_level.min(3)];
+        let ref_dist = REFRACTION_DISTANCES[self.refraction_level.min(3)];
+        if let Some(pair) = blur::blur_wallpaper_bytes_pair(bytes, radius, ref_dist) {
             cache.insert(idx, pair.clone());
             pair
         } else {
@@ -645,6 +667,8 @@ fn android_main(app: slint::android::AndroidApp) {
         settings_detail: false,
         current_group: "background",
         wallpaper_idx: 6, // Bridge at dusk (matching real TV webview)
+        blur_level: 2, // Default (radius 20)
+        refraction_level: 2, // Default (displacement 6.5px)
         layout_mode: "Dock", // Dock default (matching real TV webview)
         typography: "Manrope",
         material: "Frost",
@@ -762,7 +786,7 @@ fn android_main(app: slint::android::AndroidApp) {
                     if s.selected_detail_option < max_opt {
                         s.selected_detail_option += 1;
                     }
-                } else if s.selected_setting < 7 {
+                } else if s.selected_setting < 9 {
                     s.selected_setting += 1;
                 }
             } else if s.layout_mode == "Dock" {
@@ -1002,17 +1026,63 @@ fn android_main(app: slint::android::AndroidApp) {
 
 fn open_settings_detail(s: &mut AppState) {
     s.settings_detail = true;
-    s.selected_detail_option = 0;
     match s.selected_setting {
-        0 => s.current_group = "background",
-        1 => s.current_group = "layout",
-        2 => s.current_group = "typography",
-        3 => s.current_group = "icons",
-        4 => s.current_group = "focus",
-        5 => s.current_group = "inputs",
-        6 => s.current_group = "editor",
-        7 => s.current_group = "samsung",
-        _ => s.current_group = "background",
+        0 => {
+            s.current_group = "background";
+            s.selected_detail_option = s.wallpaper_idx as i32;
+        }
+        1 => {
+            s.current_group = "layout";
+            s.selected_detail_option = if s.layout_mode == "List" { 0 } else { 1 };
+        }
+        2 => {
+            s.current_group = "blur";
+            s.selected_detail_option = s.blur_level as i32;
+        }
+        3 => {
+            s.current_group = "refraction";
+            s.selected_detail_option = s.refraction_level as i32;
+        }
+        4 => {
+            s.current_group = "typography";
+            s.selected_detail_option = match s.typography {
+                "Manrope" => 0,
+                "Newsreader" => 1,
+                _ => 2,
+            };
+        }
+        5 => {
+            s.current_group = "icons";
+            s.selected_detail_option = if s.icon_pack == "CleanFrame default" { 0 } else { 1 };
+        }
+        6 => {
+            s.current_group = "focus";
+            s.selected_detail_option = if s.focus_style == "Minimal Pill" {
+                1
+            } else if s.material == "Frost" {
+                2
+            } else if s.material == "Clear tint" {
+                3
+            } else {
+                0
+            };
+        }
+        7 => {
+            s.current_group = "inputs";
+            s.selected_detail_option = 0;
+        }
+        8 => {
+            s.current_group = "editor";
+            s.selected_detail_option = 0;
+        }
+        9 => {
+            s.current_group = "samsung";
+            s.selected_detail_option = 0;
+        }
+        _ => {
+            s.current_group = "background";
+            s.selected_detail_option = 0;
+        }
     }
 }
 
@@ -1020,6 +1090,8 @@ fn get_detail_options_len(group: &str) -> usize {
     match group {
         "background" => WALLPAPERS.len(),
         "layout" => 2,
+        "blur" => BLUR_LEVEL_NAMES.len(),
+        "refraction" => REFRACTION_LEVEL_NAMES.len(),
         "typography" => 3,
         "icons" => 2,
         "focus" => 4,
@@ -1039,6 +1111,18 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
         }
         "layout" => {
             s.layout_mode = if s.selected_detail_option == 0 { "List" } else { "Dock" };
+        }
+        "blur" => {
+            if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < BLUR_LEVEL_NAMES.len() {
+                s.blur_level = s.selected_detail_option as usize;
+                s.frost_cache.borrow_mut().clear();
+            }
+        }
+        "refraction" => {
+            if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < REFRACTION_LEVEL_NAMES.len() {
+                s.refraction_level = s.selected_detail_option as usize;
+                s.frost_cache.borrow_mut().clear();
+            }
         }
         "typography" => {
             s.typography = match s.selected_detail_option {
@@ -1128,41 +1212,49 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     };
     win.set_focused_caption(caption_text.into());
 
-    // Update settings overview readout values (8 rows matching real_tv_settings_opened.png)
+    // Update settings overview readout values (10 rows)
     let settings = win.get_settings_list();
-    if let Some(mut first) = settings.row_data(0) {
+    if let Some(mut r) = settings.row_data(0) {
         if s.wallpaper_idx < WALLPAPERS.len() {
-            first.value = WALLPAPERS[s.wallpaper_idx].name.into();
+            r.value = WALLPAPERS[s.wallpaper_idx].name.into();
         }
-        settings.set_row_data(0, first);
+        settings.set_row_data(0, r);
     }
-    if let Some(mut second) = settings.row_data(1) {
-        second.value = s.layout_mode.into();
-        settings.set_row_data(1, second);
+    if let Some(mut r) = settings.row_data(1) {
+        r.value = s.layout_mode.into();
+        settings.set_row_data(1, r);
     }
-    if let Some(mut third) = settings.row_data(2) {
-        third.value = s.typography.into();
-        settings.set_row_data(2, third);
+    if let Some(mut r) = settings.row_data(2) {
+        r.value = BLUR_LEVEL_NAMES[s.blur_level.min(BLUR_LEVEL_NAMES.len() - 1)].into();
+        settings.set_row_data(2, r);
     }
-    if let Some(mut fourth) = settings.row_data(3) {
-        fourth.value = s.icon_pack.into();
-        settings.set_row_data(3, fourth);
+    if let Some(mut r) = settings.row_data(3) {
+        r.value = REFRACTION_LEVEL_NAMES[s.refraction_level.min(REFRACTION_LEVEL_NAMES.len() - 1)].into();
+        settings.set_row_data(3, r);
     }
-    if let Some(mut fifth) = settings.row_data(4) {
-        fifth.value = s.focus_style.into();
-        settings.set_row_data(4, fifth);
+    if let Some(mut r) = settings.row_data(4) {
+        r.value = s.typography.into();
+        settings.set_row_data(4, r);
     }
-    if let Some(mut sixth) = settings.row_data(5) {
-        sixth.value = "Device dependent".into();
-        settings.set_row_data(5, sixth);
+    if let Some(mut r) = settings.row_data(5) {
+        r.value = s.icon_pack.into();
+        settings.set_row_data(5, r);
     }
-    if let Some(mut seventh) = settings.row_data(6) {
-        seventh.value = "8 apps".into();
-        settings.set_row_data(6, seventh);
+    if let Some(mut r) = settings.row_data(6) {
+        r.value = s.focus_style.into();
+        settings.set_row_data(6, r);
     }
-    if let Some(mut eighth) = settings.row_data(7) {
-        eighth.value = "Home and TV settings".into();
-        settings.set_row_data(7, eighth);
+    if let Some(mut r) = settings.row_data(7) {
+        r.value = "Device dependent".into();
+        settings.set_row_data(7, r);
+    }
+    if let Some(mut r) = settings.row_data(8) {
+        r.value = "8 apps".into();
+        settings.set_row_data(8, r);
+    }
+    if let Some(mut r) = settings.row_data(9) {
+        r.value = "Home and TV settings".into();
+        settings.set_row_data(9, r);
     }
 
     // Update Detail Submenu Options
@@ -1198,6 +1290,34 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                     desc: "Horizontal liquid glass dock centered at the bottom of the screen".into(),
                     active: s.layout_mode == "Dock",
                 });
+                win.set_detail_options(list.into());
+            }
+            "blur" => {
+                win.set_detail_title("Optical Blur".into());
+                win.set_detail_desc("Configure background diffusion radius or turn off for crystal-clear substrate.".into());
+                let list = Rc::new(VecModel::default());
+                for (idx, &name) in BLUR_LEVEL_NAMES.iter().enumerate() {
+                    list.push(DetailOption {
+                        id: name.to_lowercase().into(),
+                        title: name.into(),
+                        desc: BLUR_LEVEL_DESCS[idx].into(),
+                        active: s.blur_level == idx,
+                    });
+                }
+                win.set_detail_options(list.into());
+            }
+            "refraction" => {
+                win.set_detail_title("Glass Edge Refraction".into());
+                win.set_detail_desc("Control Snell's law optical bending and chromatic dispersion along beveled rim.".into());
+                let list = Rc::new(VecModel::default());
+                for (idx, &name) in REFRACTION_LEVEL_NAMES.iter().enumerate() {
+                    list.push(DetailOption {
+                        id: name.to_lowercase().into(),
+                        title: name.into(),
+                        desc: REFRACTION_LEVEL_DESCS[idx].into(),
+                        active: s.refraction_level == idx,
+                    });
+                }
                 win.set_detail_options(list.into());
             }
             "typography" => {

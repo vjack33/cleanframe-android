@@ -138,16 +138,18 @@ export component MainWindow inherits Window {
     in property <int> selected_setting: 0;
     in property <int> selected_detail_option: 0;
 
-    // 8 Settings Overview Items (Matching Webview Version Exactly)
+    // 10 Settings Overview Items (With Optical Blur & Liquid Glass Refraction)
     in property <[SettingItem]> settings_list: [
-        { id: "background", label: "Background", value: "Mountain valley" },
-        { id: "layout", label: "Layout", value: "List" },
+        { id: "background", label: "Background", value: "Bridge at dusk" },
+        { id: "layout", label: "Layout", value: "Dock" },
+        { id: "blur", label: "Optical blur", value: "Default" },
+        { id: "refraction", label: "Glass refraction", value: "Default" },
         { id: "typography", label: "Typography", value: "Manrope" },
         { id: "icons", label: "Icon pack", value: "CleanFrame default" },
-        { id: "focus", label: "Focus", value: "Glass, Soft" },
+        { id: "focus", label: "Focus & Material", value: "Glass, Soft" },
         { id: "inputs", label: "TV inputs", value: "Device dependent" },
         { id: "editor", label: "Apps on Home", value: "8 apps" },
-        { id: "samsung", label: "Samsung", value: "Home and TV settings" }
+        { id: "samsung", label: "Samsung & TV", value: "Home and TV settings" }
     ];
 
     in property <[DetailOption]> detail_options: [];
@@ -765,134 +767,142 @@ export component MainWindow inherits Window {
     }
 
     // ==========================================
-    // 5. MODAL SETTINGS SHEET (Floating Liquid Glass)
+    // 5. MODAL SETTINGS SHEET (Side-by-Side with Live Dashboard Preview)
     // ==========================================
     if root.settings_open: Rectangle {
         width: 100%;
         height: 100%;
-        // Subtle ambient veil allowing wallpaper depth to breathe through
-        background: rgba(6, 10, 14, 0.40);
+        background: rgba(6, 10, 14, 0.45);
 
-        // LEVEL 0: SETTINGS OVERVIEW LIST
-        if !root.settings_detail: Rectangle {
-            width: 100%;
-            height: 100%;
+        // LEFT COLUMN: SETTINGS CONTROLS (Width 400px)
+        Rectangle {
+            x: 44px;
+            y: 28px;
+            width: 400px;
+            height: 484px;
 
-            // Floating Hero Liquid Glass Card
-            Rectangle {
-                x: (root.width - 760px) / 2;
-                y: (root.height - 480px) / 2;
-                width: 760px;
-                height: 480px;
+            LiquidGlassPanel {
+                width: 100%;
+                height: 100%;
+                border-radius: 20px;
+                frost_image: root.dynamic_frost_image;
+                origin_x: 44px;
+                origin_y: 28px;
+                glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 35%, rgba(18, 22, 28, 0.26) 70%, rgba(10, 14, 18, 0.40) 100%);
+            }
 
-                LiquidGlassPanel {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 24px;
-                    frost_image: root.dynamic_frost_image;
-                    origin_x: (root.width - 760px) / 2;
-                    origin_y: (root.height - 480px) / 2;
-                    glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
-                    rim_color: rgba(255, 255, 255, 0.35);
-                    rim_width: 1.2px;
-                    show_specular_hairline: true;
-                    show_left_rim: true;
-                }
+            // LEVEL 0: SETTINGS OVERVIEW LIST
+            if !root.settings_detail: Rectangle {
+                width: 100%;
+                height: 100%;
 
                 // Title
                 Text {
-                    x: 32px;
-                    y: 22px;
+                    x: 24px;
+                    y: 20px;
                     text: "Settings";
-                    font-size: 28px;
+                    font-size: 24px;
                     font-weight: 600;
                     color: #ffffff;
                 }
 
                 // Clock Chip in Top-Right
                 Rectangle {
-                    x: parent.width - 110px;
-                    y: 22px;
-                    width: 78px;
-                    height: 28px;
-                    border-radius: 14px;
+                    x: parent.width - 92px;
+                    y: 20px;
+                    width: 68px;
+                    height: 24px;
+                    border-radius: 12px;
                     background: rgba(255, 255, 255, 0.12);
 
                     Text {
                         x: 0px;
-                        y: 5px;
+                        y: 4px;
                         width: parent.width;
                         horizontal-alignment: center;
                         text: root.clock_text;
-                        font-size: 14px;
+                        font-size: 13px;
                         font-weight: 500;
                         color: #ffffff;
                     }
                 }
 
-                // 8 Settings Categories List (Inside Panel)
-                for s[s_idx] in root.settings_list: Rectangle {
-                    x: 32px;
-                    y: 64px + s_idx * 44px;
-                    width: parent.width - 64px;
-                    height: 40px;
-                    border-radius: 12px;
+                // 10 Settings Categories List (Scrollable window)
+                Rectangle {
+                    x: 16px;
+                    y: 56px;
+                    width: parent.width - 32px;
+                    height: 384px;
+                    clip: true;
 
-                    // Focused elevated luminous plate (No borders)
-                    if (root.selected_setting == s_idx): Rectangle {
-                        width: 100%;
-                        height: 100%;
-                        border-radius: 12px;
-                        background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                    }
+                    for s[s_idx] in root.settings_list: Rectangle {
+                        x: 0px;
+                        y: s_idx * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 82px);
+                        width: parent.width;
+                        height: 38px;
+                        border-radius: 10px;
 
-                    // Label & Value
-                    Text {
-                        x: 18px;
-                        y: 4px;
-                        height: 18px;
-                        vertical-alignment: center;
-                        text: s.label;
-                        font-size: 14px;
-                        font-weight: 600;
-                        color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
-                    }
+                        animate y { duration: 120ms; }
 
-                    Text {
-                        x: 18px;
-                        y: 21px;
-                        height: 15px;
-                        vertical-alignment: center;
-                        text: s.value;
-                        font-size: 11px;
-                        font-weight: 400;
-                        color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.68);
-                    }
+                        // Focused elevated luminous plate
+                        if (root.selected_setting == s_idx): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 10px;
+                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
+                        }
 
-                    Text {
-                        x: parent.width - 28px;
-                        y: 0px;
-                        height: parent.height;
-                        vertical-alignment: center;
-                        text: "›";
-                        font-size: 18px;
-                        font-weight: 600;
-                        color: (root.selected_setting == s_idx) ? #111111 : rgba(255, 255, 255, 0.45);
+                        // Label & Value
+                        Text {
+                            x: 14px;
+                            y: 4px;
+                            height: 16px;
+                            vertical-alignment: center;
+                            text: s.label;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: (root.selected_setting == s_idx) ? #111111 : #ffffff;
+                        }
+
+                        Text {
+                            x: 14px;
+                            y: 20px;
+                            height: 14px;
+                            vertical-alignment: center;
+                            text: s.value;
+                            font-size: 10px;
+                            font-weight: 400;
+                            color: (root.selected_setting == s_idx) ? #444444 : rgba(246, 241, 231, 0.68);
+                        }
+
+                        Text {
+                            x: parent.width - 24px;
+                            y: 0px;
+                            width: 16px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            text: "›";
+                            font-size: 16px;
+                            font-weight: 600;
+                            color: (root.selected_setting == s_idx) ? #111111 : rgba(246, 241, 231, 0.40);
+                        }
                     }
                 }
 
-                // Bottom Prompt Bar
+                // Bottom Hint
                 Rectangle {
-                    x: 32px;
-                    y: parent.height - 42px;
+                    x: 24px;
+                    y: parent.height - 34px;
+                    width: parent.width - 48px;
                     height: 24px;
 
                     Rectangle {
                         x: 0px;
-                        y: 0px;
-                        width: 32px;
-                        height: 22px;
-                        border-radius: 11px;
+                        y: 1px;
+                        width: 28px;
+                        height: 20px;
+                        border-radius: 10px;
                         background: rgba(255, 255, 255, 0.22);
 
                         Text {
@@ -908,50 +918,28 @@ export component MainWindow inherits Window {
                     }
 
                     Text {
-                        x: 38px;
+                        x: 36px;
                         y: 4px;
-                        text: "Open selected group  ·  Back Exit to Home";
-                        font-size: 12px;
-                        font-weight: 400;
-                        color: rgba(246, 241, 231, 0.85);
+                        text: "Open · Back Exit";
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: rgba(246, 241, 231, 0.65);
                     }
                 }
             }
-        }
 
-        // LEVEL 1: DETAILED SUBMENU OPTIONS
-        if root.settings_detail: Rectangle {
-            width: 100%;
-            height: 100%;
+            // LEVEL 1: DETAIL SUBMENU OPTIONS
+            if root.settings_detail: Rectangle {
+                width: 100%;
+                height: 100%;
 
-            // Floating Hero Liquid Glass Card
-            Rectangle {
-                x: (root.width - 760px) / 2;
-                y: (root.height - 480px) / 2;
-                width: 760px;
-                height: 480px;
-
-                LiquidGlassPanel {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 24px;
-                    frost_image: root.dynamic_frost_image;
-                    origin_x: (root.width - 760px) / 2;
-                    origin_y: (root.height - 480px) / 2;
-                    glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 35%, rgba(18, 22, 28, 0.28) 70%, rgba(10, 14, 18, 0.42) 100%);
-                    rim_color: rgba(255, 255, 255, 0.35);
-                    rim_width: 1.2px;
-                    show_specular_hairline: true;
-                    show_left_rim: true;
-                }
-
-                // Back Button Glass Pill (‹ Settings)
+                // Back Button
                 Rectangle {
-                    x: 32px;
-                    y: 20px;
-                    width: 110px;
-                    height: 28px;
-                    border-radius: 14px;
+                    x: 20px;
+                    y: 16px;
+                    width: 96px;
+                    height: 26px;
+                    border-radius: 13px;
                     background: (root.selected_detail_option == -1) ?
                         @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%) :
                         rgba(255, 255, 255, 0.12);
@@ -964,7 +952,7 @@ export component MainWindow inherits Window {
                         horizontal-alignment: center;
                         vertical-alignment: center;
                         text: "‹ Settings";
-                        font-size: 12px;
+                        font-size: 11px;
                         font-weight: 600;
                         color: (root.selected_detail_option == -1) ? #111111 : #ffffff;
                     }
@@ -972,98 +960,99 @@ export component MainWindow inherits Window {
 
                 // Submenu Title
                 Text {
-                    x: 32px;
-                    y: 56px;
+                    x: 24px;
+                    y: 48px;
                     text: root.detail_title;
-                    font-size: 26px;
+                    font-size: 20px;
                     font-weight: 600;
                     color: #ffffff;
                 }
 
                 // Submenu Description
                 Text {
-                    x: 32px;
-                    y: 88px;
+                    x: 24px;
+                    y: 74px;
+                    width: parent.width - 48px;
                     text: root.detail_desc;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: 400;
                     color: rgba(246, 241, 231, 0.70);
+                    wrap: word-wrap;
                 }
 
                 // Options List (Scrollable)
                 Rectangle {
-                    x: 32px;
-                    y: 114px;
-                    width: parent.width - 64px;
-                    height: 310px;
+                    x: 16px;
+                    y: 106px;
+                    width: parent.width - 32px;
+                    height: 336px;
                     clip: true;
 
                     for opt[o_idx] in root.detail_options: Rectangle {
                         x: 0px;
-                        y: (o_idx * 48px) - ((root.selected_detail_option > 4) ? (root.selected_detail_option - 4) * 48px : 0px);
+                        y: (o_idx * 44px) - ((root.selected_detail_option > 5) ? (root.selected_detail_option - 5) * 44px : 0px);
                         width: parent.width;
-                        height: 44px;
-                        border-radius: 12px;
-
-                        // Focused elevated luminous plate (No borders)
-                        if (root.selected_detail_option == o_idx): Rectangle {
-                            width: 100%;
-                            height: 100%;
-                            border-radius: 12px;
-                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
-                        }
+                        height: 40px;
+                        border-radius: 10px;
 
                         animate y { duration: 120ms; }
 
-                        // Radio indicator dot (Apple iOS systemGreen #34C759)
+                        // Focused plate
+                        if (root.selected_detail_option == o_idx): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 10px;
+                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 242, 248, 0.88) 100%);
+                        }
+
+                        // Radio indicator dot
                         Rectangle {
-                            x: 16px;
-                            y: (parent.height - 12px) / 2;
-                            width: 12px;
-                            height: 12px;
-                            border-radius: 6px;
-                            border-width: 1.5px;
-                            border-color: (root.selected_detail_option == o_idx) ? #111111 : rgba(255, 255, 255, 0.50);
-                            background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #34C759) : rgba(0, 0, 0, 0);
+                            x: 12px;
+                            y: (parent.height - 10px) / 2;
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #34C759) : rgba(255, 255, 255, 0.25);
                         }
 
                         // Option Title & Description
                         Text {
-                            x: 38px;
-                            y: 4px;
-                            height: 18px;
+                            x: 30px;
+                            y: 3px;
+                            height: 16px;
                             vertical-alignment: center;
                             text: opt.title;
-                            font-size: 14px;
+                            font-size: 12px;
                             font-weight: 600;
                             color: (root.selected_detail_option == o_idx) ? #111111 : #ffffff;
                         }
 
                         Text {
-                            x: 38px;
-                            y: 22px;
+                            x: 30px;
+                            y: 19px;
                             height: 16px;
                             vertical-alignment: center;
                             text: opt.desc;
-                            font-size: 11px;
+                            font-size: 10px;
                             font-weight: 400;
                             color: (root.selected_detail_option == o_idx) ? #444444 : rgba(246, 241, 231, 0.65);
                         }
                     }
                 }
 
-                // Bottom Prompt
+                // Bottom Hint
                 Rectangle {
-                    x: 32px;
-                    y: parent.height - 42px;
+                    x: 24px;
+                    y: parent.height - 34px;
+                    width: parent.width - 48px;
                     height: 24px;
 
                     Rectangle {
                         x: 0px;
-                        y: 0px;
-                        width: 32px;
-                        height: 22px;
-                        border-radius: 11px;
+                        y: 1px;
+                        width: 28px;
+                        height: 20px;
+                        border-radius: 10px;
                         background: rgba(255, 255, 255, 0.22);
 
                         Text {
@@ -1079,13 +1068,304 @@ export component MainWindow inherits Window {
                     }
 
                     Text {
-                        x: 38px;
+                        x: 36px;
                         y: 4px;
-                        text: "Select option  ·  Back to return";
-                        font-size: 12px;
-                        font-weight: 400;
+                        text: "Apply choice · Back return";
+                        font-size: 11px;
+                        font-weight: 500;
+                        color: rgba(246, 241, 231, 0.65);
+                    }
+                }
+            }
+        }
+
+        // RIGHT COLUMN: LIVE DASHBOARD PREVIEW
+        Rectangle {
+            x: 462px;
+            y: 28px;
+            width: 456px;
+            height: 484px;
+
+            // Header label
+            Text {
+                x: 6px;
+                y: 4px;
+                text: "LIVE DASHBOARD PREVIEW";
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                color: rgba(246, 241, 231, 0.70);
+            }
+
+            // Scaled 16:9 Live Preview Box (456px x 256.5px)
+            Rectangle {
+                x: 0px;
+                y: 24px;
+                width: 456px;
+                height: 256.5px;
+                border-radius: 16px;
+                clip: true;
+                drop-shadow-offset-y: 12px;
+                drop-shadow-blur: 28px;
+                drop-shadow-color: rgba(0, 0, 0, 0.50);
+
+                // 1. Wallpaper Image
+                Image {
+                    width: 100%;
+                    height: 100%;
+                    image-fit: cover;
+                    source: (root.wallpaper_idx == 0) ? @image-url("assets/wallpapers/misty.jpg") :
+                            (root.wallpaper_idx == 1) ? @image-url("assets/wallpapers/cove.jpg") :
+                            (root.wallpaper_idx == 2) ? @image-url("assets/wallpapers/forest.jpg") :
+                            (root.wallpaper_idx == 3) ? @image-url("assets/wallpapers/valley.jpg") :
+                            (root.wallpaper_idx == 4) ? @image-url("assets/wallpapers/night.jpg") :
+                            (root.wallpaper_idx == 5) ? @image-url("assets/wallpapers/peaks.jpg") :
+                            (root.wallpaper_idx == 6) ? @image-url("assets/wallpapers/bridge.jpg") :
+                            (root.wallpaper_idx == 7) ? @image-url("assets/wallpapers/ridge.jpg") :
+                            (root.wallpaper_idx == 8) ? @image-url("assets/wallpapers/golden.jpg") :
+                            (root.wallpaper_idx == 9) ? @image-url("assets/wallpapers/summit.jpg") :
+                            (root.wallpaper_idx == 10) ? @image-url("assets/wallpapers/goldcoast.jpg") :
+                            (root.wallpaper_idx == 11) ? @image-url("assets/wallpapers/sydney.jpg") :
+                            (root.wallpaper_idx == 12) ? @image-url("assets/wallpapers/amber.jpg") :
+                            (root.wallpaper_idx == 13) ? @image-url("assets/wallpapers/mint.jpg") :
+                            @image-url("assets/wallpapers/alpine.jpg");
+                }
+
+                // Scrims
+                Rectangle {
+                    x: 0px;
+                    y: 0px;
+                    width: 100%;
+                    height: 80px;
+                    background: @linear-gradient(180deg, rgba(6, 12, 16, 0.28) 0%, rgba(6, 12, 16, 0.0) 100%);
+                }
+                Rectangle {
+                    x: 0px;
+                    y: 130px;
+                    width: 100%;
+                    height: 126.5px;
+                    background: @linear-gradient(180deg, rgba(4, 10, 12, 0.0) 0%, rgba(4, 10, 12, 0.30) 100%);
+                }
+
+                // Preview Clock & Caption (Top-Left)
+                Text {
+                    x: 26px;
+                    y: 16px;
+                    text: root.clock_text;
+                    font-size: 21px;
+                    font-weight: 500;
+                    color: #f6f1e7;
+                }
+                Text {
+                    x: 26px;
+                    y: 42px;
+                    text: root.focused_caption;
+                    font-size: 10px;
+                    font-weight: 500;
+                    color: rgba(246, 241, 231, 0.90);
+                }
+
+                // Preview Utility Pill (Top-Right)
+                Rectangle {
+                    x: parent.width - 170px;
+                    y: 16px;
+                    width: 154px;
+                    height: 18px;
+                    border-radius: 9px;
+                    clip: true;
+                    drop-shadow-offset-y: 6px;
+                    drop-shadow-blur: 14px;
+                    drop-shadow-color: rgba(0, 0, 0, 0.35);
+
+                    Image {
+                        x: -(parent.x);
+                        y: -(parent.y);
+                        width: 456px;
+                        height: 256.5px;
+                        image-fit: cover;
+                        source: root.dynamic_frost_image;
+                    }
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(255, 255, 255, 0.16);
+                    }
+                    Text {
+                        x: 0px;
+                        y: 3px;
+                        width: parent.width;
+                        horizontal-alignment: center;
+                        text: "Art Mode · All apps · Inputs · Settings";
+                        font-size: 7px;
+                        font-weight: 500;
                         color: rgba(246, 241, 231, 0.85);
                     }
+                }
+
+                // Preview HDMI Pill
+                Rectangle {
+                    x: (parent.width - 186px) / 2;
+                    y: 138px;
+                    width: 186px;
+                    height: 16px;
+                    border-radius: 8px;
+                    clip: true;
+                    drop-shadow-offset-y: 6px;
+                    drop-shadow-blur: 14px;
+                    drop-shadow-color: rgba(0, 0, 0, 0.35);
+
+                    Image {
+                        x: -(parent.x);
+                        y: -(parent.y);
+                        width: 456px;
+                        height: 256.5px;
+                        image-fit: cover;
+                        source: root.dynamic_frost_image;
+                    }
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(255, 255, 255, 0.16);
+                    }
+                    Text {
+                        x: 0px;
+                        y: 3px;
+                        width: parent.width;
+                        horizontal-alignment: center;
+                        text: "HDMI 1 · Mac   HDMI 2   HDMI 3   AV";
+                        font-size: 8px;
+                        font-weight: 500;
+                        color: rgba(246, 241, 231, 0.85);
+                    }
+                }
+
+                // Preview DOCK (When layout == "Dock")
+                if root.current_layout == "Dock": Rectangle {
+                    x: (parent.width - 357px) / 2;
+                    y: 161px;
+                    width: 357px;
+                    height: 55px;
+                    border-radius: 12px;
+                    clip: true;
+                    drop-shadow-offset-y: 8px;
+                    drop-shadow-blur: 18px;
+                    drop-shadow-color: rgba(0, 0, 0, 0.40);
+
+                    // 1:1 Co-located Optical Glass Refraction Image
+                    Image {
+                        x: -((parent.width - 357px) / 2);
+                        y: -161px;
+                        width: 456px;
+                        height: 256.5px;
+                        image-fit: cover;
+                        source: root.dock_frost_image;
+                    }
+
+                    // Translucent Tint
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: @linear-gradient(155deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 30%, rgba(18, 22, 28, 0.20) 70%, rgba(12, 16, 22, 0.32) 100%);
+                    }
+
+                    // Mini carousel apps
+                    for app[i] in root.apps: Rectangle {
+                        x: 6px + i * 43px;
+                        y: 4px;
+                        width: 40px;
+                        height: 47px;
+                        border-radius: 8px;
+
+                        // Focused plate
+                        if (root.selected_app == i): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            border-radius: 8px;
+                            background: @linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, rgba(235, 242, 250, 0.16) 48%, rgba(255, 255, 255, 0.22) 100%);
+                        }
+
+                        Image {
+                            x: (parent.width - 16px) / 2;
+                            y: 8px;
+                            width: 16px;
+                            height: 16px;
+                            image-fit: contain;
+                            source: app.icon;
+                        }
+
+                        Text {
+                            x: 0px;
+                            y: 28px;
+                            width: parent.width;
+                            horizontal-alignment: center;
+                            text: app.name;
+                            font-size: 7px;
+                            font-weight: 500;
+                            color: #ffffff;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // Preview LIST (When layout == "List")
+                if root.current_layout == "List": Rectangle {
+                    x: 26px;
+                    y: 70px;
+                    width: 180px;
+                    height: 160px;
+
+                    for app[i] in root.apps: Rectangle {
+                        y: i * 20px;
+                        width: 160px;
+                        height: 18px;
+                        border-radius: 6px;
+
+                        if (root.selected_app == i): Rectangle {
+                            width: 120px;
+                            height: 100%;
+                            border-radius: 6px;
+                            background: rgba(255, 255, 255, 0.25);
+                        }
+
+                        Text {
+                            x: 10px;
+                            y: 2px;
+                            text: app.name;
+                            font-size: 10px;
+                            font-weight: 500;
+                            color: #ffffff;
+                        }
+                    }
+                }
+            }
+
+            // Info Card Below Preview
+            Rectangle {
+                x: 0px;
+                y: 295px;
+                width: 456px;
+                height: 175px;
+                border-radius: 14px;
+                background: rgba(18, 24, 32, 0.38);
+
+                Text {
+                    x: 20px;
+                    y: 16px;
+                    text: "Optical Liquid Glass System";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #ffffff;
+                }
+
+                Text {
+                    x: 20px;
+                    y: 40px;
+                    width: parent.width - 40px;
+                    text: "• Optical Blur: Configures dynamic dual-pass StackBlur diffusion. Setting to 'Off' disables diffusion for crystal-clear transparent glass.\n• Glass Refraction: Configures Snell's Law inward ray deflection and chromatic prism dispersion along the dock bevel. Setting to 'Off' produces flat borderless glass.\n• Live Preview: The preview above updates immediately with every adjustment.";
+                    font-size: 11px;
+                    font-weight: 400;
+                    color: rgba(246, 241, 231, 0.80);
+                    wrap: word-wrap;
                 }
             }
         }

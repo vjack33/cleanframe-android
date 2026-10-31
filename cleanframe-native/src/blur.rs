@@ -344,13 +344,14 @@ fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
 /// Applies physical lens refraction (Snell's Law), chromatic dispersion (prism fringing),
 /// Schlick Fresnel edge reflectance, and directional specular glare to the Dock glass bevel.
 /// Modeled after the optical physics in https://github.com/iyinchao/liquid-glass-studio.
-pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize) {
+pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize, ref_distance: f32) {
+    if ref_distance <= 0.0 {
+        return;
+    }
     let src = pixels.to_vec();
 
     // Refraction bevel thickness in buffer pixels (~24px on 960x540 screen)
     const REF_THICKNESS: f32 = 8.0;
-    // Base refraction ray displacement in buffer pixels
-    const REF_DISTANCE: f32 = 6.5;
     // Chromatic dispersion factor (wavelength split between red and blue)
     const DISPERSION: f32 = 0.05;
     // Glass refractive index (crown glass)
@@ -385,7 +386,7 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
             let edge_factor = (theta_i - theta_t).tan().max(0.0);
 
             // Deflection vector pointing inward (into the glass slab)
-            let base_disp = edge_factor * REF_DISTANCE;
+            let base_disp = edge_factor * ref_distance;
             let offset_x = -nx * base_disp;
             let offset_y = -ny * base_disp;
 
@@ -454,6 +455,7 @@ pub fn blur_rgba_image_pair(
     target_height: u32,
     radius: usize,
     saturation: f32,
+    ref_distance: f32,
 ) -> (Image, Image) {
     let resized = image::imageops::resize(
         img,
@@ -462,9 +464,11 @@ pub fn blur_rgba_image_pair(
         image::imageops::FilterType::Triangle,
     );
     let mut pixels = resized.into_raw();
-    stack_blur_rgba(&mut pixels, target_width as usize, target_height as usize, radius);
-    if saturation > 1.0 {
-        boost_saturation(&mut pixels, saturation);
+    if radius > 0 {
+        stack_blur_rgba(&mut pixels, target_width as usize, target_height as usize, radius);
+        if saturation > 1.0 {
+            boost_saturation(&mut pixels, saturation);
+        }
     }
 
     // 1. Clean frost for general panels and settings modal
@@ -472,13 +476,21 @@ pub fn blur_rgba_image_pair(
 
     // 2. Optically refracted and chromatic-dispersed frost for the Dock
     let mut dock_pixels = pixels;
-    apply_glass_refraction_dispersion(&mut dock_pixels, target_width as usize, target_height as usize);
+    if ref_distance > 0.0 {
+        apply_glass_refraction_dispersion(
+            &mut dock_pixels,
+            target_width as usize,
+            target_height as usize,
+            ref_distance,
+        );
+    }
     let dock_img = pixels_to_image(&dock_pixels, target_width, target_height);
 
     (clean_img, dock_img)
 }
 
 /// Downscales, blurs, and boosts saturation of any RGBA image on the fly, returning a Slint Image.
+#[allow(dead_code)]
 pub fn blur_rgba_image(
     img: &image::RgbaImage,
     target_width: u32,
@@ -486,20 +498,21 @@ pub fn blur_rgba_image(
     radius: usize,
     saturation: f32,
 ) -> Image {
-    let (clean, _) = blur_rgba_image_pair(img, target_width, target_height, radius, saturation);
+    let (clean, _) = blur_rgba_image_pair(img, target_width, target_height, radius, saturation, 6.5);
     clean
 }
 
 /// Decodes any wallpaper bytes (JPEG/PNG), computes optical blur on the fly,
 /// returning (clean_frost, dock_refracted_frost).
-pub fn blur_wallpaper_bytes_pair(bytes: &[u8]) -> Option<(Image, Image)> {
+pub fn blur_wallpaper_bytes_pair(bytes: &[u8], radius: usize, ref_distance: f32) -> Option<(Image, Image)> {
     let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    Some(blur_rgba_image_pair(&img, 320, 180, 20, 1.35))
+    Some(blur_rgba_image_pair(&img, 320, 180, radius, 1.35, ref_distance))
 }
 
 /// Decodes any wallpaper bytes (JPEG/PNG), computes optical blur on the fly, and returns a Slint Image.
+#[allow(dead_code)]
 pub fn blur_wallpaper_bytes(bytes: &[u8]) -> Option<Image> {
-    let (clean, _) = blur_wallpaper_bytes_pair(bytes)?;
+    let (clean, _) = blur_wallpaper_bytes_pair(bytes, 20, 6.5)?;
     Some(clean)
 }
 
