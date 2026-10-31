@@ -273,6 +273,7 @@ export component MainWindow inherits Window {
         // ==========================================
         // --- DOCK LAYOUT (Liquid Frosted Glass) ---
         // ==========================================
+        // Calibrated to liquid-rust Material::clear_bar (Apple iOS 26/27 Dock)
         // 960x540 geometry: width: 752px, height: 116px, y: 338px
         if root.current_layout == "Dock": Rectangle {
             x: (root.width - 752px) / 2;
@@ -280,54 +281,62 @@ export component MainWindow inherits Window {
             width: 752px;
             height: 116px;
 
-            // 1. Ambient Volumetric Shadows (Multi-stage diffuse ambient depth)
+            // 1. Volumetric Ambient Drop Shadows (liquid-rust offset_y: 8.0, blur: 15.0)
             Rectangle {
-                x: 8px;
-                y: 14px;
-                width: parent.width - 16px;
+                x: 6px;
+                y: 12px;
+                width: parent.width - 12px;
                 height: parent.height + 4px;
                 border-radius: 28px;
-                background: rgba(0, 0, 0, 0.48);
+                background: rgba(0, 0, 0, 0.45);
             }
             Rectangle {
-                x: 3px;
-                y: 7px;
-                width: parent.width - 6px;
+                x: 2px;
+                y: 6px;
+                width: parent.width - 4px;
                 height: parent.height;
                 border-radius: 26px;
-                background: rgba(0, 0, 0, 0.32);
+                background: rgba(0, 0, 0, 0.28);
             }
 
-            // 2. Liquid Frosted Glass Backdrop Mat
-            // Multi-stop gradient: top specular edge flows into translucent smoky frosted slate
+            // 2. Liquid Glass Backdrop Mat (liquid-rust Material::clear_bar: luminance 0.6, mix 0.33)
             Rectangle {
                 width: 100%;
                 height: 100%;
                 border-radius: 26px;
                 background: (root.current_material == "Clear tint") ?
-                    @linear-gradient(140deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 32%, rgba(20, 26, 32, 0.65) 68%, rgba(10, 14, 18, 0.82) 100%) :
+                    @linear-gradient(145deg, rgba(255, 255, 255, 0.18) 0%, rgba(153, 153, 153, 0.05) 26%, rgba(20, 26, 32, 0.58) 65%, rgba(10, 14, 18, 0.82) 100%) :
                     (root.current_material == "Soft") ?
-                    @linear-gradient(140deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 32%, rgba(24, 30, 38, 0.52) 68%, rgba(14, 18, 24, 0.70) 100%) :
-                    @linear-gradient(140deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 32%, rgba(18, 22, 28, 0.58) 68%, rgba(12, 16, 22, 0.76) 100%);
-                border-width: 1.2px;
-                border-color: rgba(255, 255, 255, 0.28);
+                    @linear-gradient(145deg, rgba(255, 255, 255, 0.22) 0%, rgba(160, 160, 160, 0.08) 26%, rgba(24, 30, 38, 0.48) 65%, rgba(14, 18, 24, 0.70) 100%) :
+                    @linear-gradient(145deg, rgba(255, 255, 255, 0.20) 0%, rgba(153, 153, 153, 0.07) 26%, rgba(18, 22, 28, 0.52) 65%, rgba(12, 16, 22, 0.75) 100%);
+                border-width: 1.25px;
+                border-color: rgba(255, 255, 255, 0.26);
 
-                // Top Specular Inset Rim Highlight (Hairline laser sheen)
+                // Top Specular Inset Rim Highlight (liquid-rust 1.25pt inner hairline + #282828 dodge)
                 Rectangle {
                     x: 24px;
                     y: 1px;
                     width: parent.width - 48px;
-                    height: 1.2px;
-                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.45) 20%, rgba(255, 255, 255, 0.70) 50%, rgba(255, 255, 255, 0.45) 80%, rgba(255, 255, 255, 0.0) 100%);
+                    height: 1.25px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.42) 20%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0.42) 80%, rgba(255, 255, 255, 0.0) 100%);
                 }
 
-                // Left specular edge highlight
+                // Left specular edge highlight (directional light sweep)
                 Rectangle {
                     x: 1px;
                     y: 20px;
                     width: 1px;
                     height: parent.height - 40px;
-                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.10) 100%);
+                    background: @linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.08) 100%);
+                }
+
+                // Bottom subtle edge burn (liquid-rust darkened hairline edge)
+                Rectangle {
+                    x: 32px;
+                    y: parent.height - 2px;
+                    width: parent.width - 64px;
+                    height: 1px;
+                    background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.0) 100%);
                 }
             }
 
@@ -354,26 +363,26 @@ export component MainWindow inherits Window {
                         height: 100px;
                         border-radius: 16px;
 
-                        // Non-focused subtle frosted glass plate (nested glass feel)
+                        // Non-focused subtle frosted glass plate (liquid-rust Material::regular dark tone)
                         if (root.active_zone != "apps" || root.selected_app != i): Rectangle {
                             x: 8px;
                             y: 8px;
                             width: parent.width - 16px;
                             height: parent.height - 16px;
                             border-radius: 16px;
-                            background: rgba(255, 255, 255, 0.045);
+                            background: @linear-gradient(165deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(18, 22, 28, 0.35) 100%);
                             border-width: 0.8px;
-                            border-color: rgba(255, 255, 255, 0.11);
+                            border-color: rgba(255, 255, 255, 0.12);
                         }
 
-                        // Focused Tile Liquid Glass Plate
+                        // Focused Tile Liquid Glass Plate (liquid-rust Material::tinted stained crystal)
                         if (root.active_zone == "apps" && root.selected_app == i): Rectangle {
                             x: 6px;
                             y: 4px;
                             width: parent.width - 12px;
                             height: parent.height - 8px;
 
-                            // Plate Outer Drop Shadow
+                            // Plate Outer Drop Shadow (liquid-rust offset_y: 6.0, blur: 14.0)
                             Rectangle {
                                 x: 2px;
                                 y: 6px;
@@ -390,9 +399,9 @@ export component MainWindow inherits Window {
                                 border-radius: 18px;
                                 background: (root.current_focus_style == "Minimal Pill") ?
                                     rgba(255, 255, 255, 0.28) :
-                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.45) 0%, rgba(240, 245, 250, 0.22) 48%, rgba(255, 255, 255, 0.35) 100%);
-                                border-width: 1.2px;
-                                border-color: rgba(255, 255, 255, 0.75);
+                                    @linear-gradient(155deg, rgba(255, 255, 255, 0.48) 0%, rgba(235, 242, 250, 0.24) 48%, rgba(255, 255, 255, 0.36) 100%);
+                                border-width: 1.25px;
+                                border-color: rgba(255, 255, 255, 0.80);
 
                                 // Inset top specular highlight
                                 Rectangle {
@@ -470,14 +479,14 @@ export component MainWindow inherits Window {
                 background: rgba(0, 0, 0, 0.32);
             }
 
-            // Glass Capsule Tray Body
+            // Glass Capsule Tray Body (liquid-rust Material::clear_bar)
             Rectangle {
                 width: 100%;
                 height: 100%;
                 border-radius: 16px;
-                background: @linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(18, 22, 28, 0.52) 100%);
+                background: @linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(18, 24, 30, 0.52) 100%);
                 border-width: 1px;
-                border-color: rgba(255, 255, 255, 0.22);
+                border-color: rgba(255, 255, 255, 0.24);
 
                 // Inset top specular line
                 Rectangle {
@@ -557,14 +566,22 @@ export component MainWindow inherits Window {
                     color: (root.active_zone == "inputs" && root.selected_input == h_idx) ? #ffffff : #f6f1e7;
                 }
 
-                // Status Dot (Emerald glow when connected)
+                // Status Dot (Apple iOS 26 systemGreen #34C759 with radiant aura)
+                if hdmi.connected: Rectangle {
+                    x: parent.width - 14px;
+                    y: 8px;
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 5px;
+                    background: rgba(52, 199, 89, 0.28);
+                }
                 Rectangle {
                     x: parent.width - 12px;
                     y: 10px;
                     width: 6px;
                     height: 6px;
                     border-radius: 3px;
-                    background: hdmi.connected ? #34d399 : rgba(255, 255, 255, 0.28);
+                    background: hdmi.connected ? #34C759 : rgba(255, 255, 255, 0.28);
                 }
             }
         }
@@ -1264,7 +1281,7 @@ export component MainWindow inherits Window {
 
                         animate y { duration: 120ms; }
 
-                        // Radio indicator dot
+                        // Radio indicator dot (Apple iOS 26 systemGreen #34C759)
                         Rectangle {
                             x: 16px;
                             y: 16px;
@@ -1273,7 +1290,7 @@ export component MainWindow inherits Window {
                             border-radius: 6px;
                             border-width: 1.5px;
                             border-color: (root.selected_detail_option == o_idx) ? #111111 : rgba(255, 255, 255, 0.50);
-                            background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #10b981) : rgba(0, 0, 0, 0);
+                            background: opt.active ? ((root.selected_detail_option == o_idx) ? #111111 : #34C759) : rgba(0, 0, 0, 0);
                         }
 
                         // Option Title & Description
