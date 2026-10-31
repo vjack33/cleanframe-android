@@ -509,12 +509,12 @@ fn android_main(app: slint::android::AndroidApp) {
         wallpaper_idx: 6, // Bridge at dusk (matching real TV webview)
         layout_mode: "Dock", // Dock default (matching real TV webview)
         typography: "Manrope",
-        material: "Soft",
+        material: "Frost",
         focus_style: "Glass, Soft",
         icon_pack: "CleanFrame default",
         art_mode: false,
         art_saved_notice: false,
-        now_playing_visible: true,
+        now_playing_visible: false,
         now_playing_title: "CleanFrame Ambient".to_string(),
         now_playing_artist: "The Frame Audio".to_string(),
         now_playing_playing: false,
@@ -525,6 +525,7 @@ fn android_main(app: slint::android::AndroidApp) {
     main_window.set_selected_app(3);
     main_window.set_wallpaper_idx(6);
     main_window.set_current_layout("Dock".into());
+    main_window.set_now_playing_visible(false);
 
     let app_handle = Rc::new(app);
 
@@ -961,6 +962,7 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_current_material(s.material.into());
     win.set_current_focus_style(s.focus_style.into());
     win.set_current_icon_pack(s.icon_pack.into());
+    win.set_now_playing_visible(s.now_playing_visible);
 
     // Art Mode sync
     win.set_art_mode(s.art_mode);
