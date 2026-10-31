@@ -29,7 +29,7 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -o "$WORK_DIR/apk_root/lib" build --releas
 
 echo "=== Packaging CleanFrame Native APK ==="
 cd "$DIR"
-"$BUILD_TOOLS/aapt2" compile --dir "$DIR/app/src/main/res" -o "$WORK_DIR/compiled_res.zip"
+"$BUILD_TOOLS/aapt2" compile --dir "$DIR/cleanframe-native/res" -o "$WORK_DIR/compiled_res.zip"
 
 "$BUILD_TOOLS/aapt2" link \
     -I "$ANDROID_JAR" \

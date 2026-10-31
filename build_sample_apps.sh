@@ -31,7 +31,7 @@ build_and_install_app() {
     rm -rf "$WORK_DIR"
     mkdir -p "$WORK_DIR/res/drawable" "$WORK_DIR/compiled_res" "$WORK_DIR/gen" "$WORK_DIR/classes" "$WORK_DIR/dex" "$WORK_DIR/src"
 
-    cp -r "$DIR/app/src/main/res/"* "$WORK_DIR/res/"
+    cp -r "$DIR/cleanframe-native/res/"* "$WORK_DIR/res/"
 
     cat <<EOF > "$WORK_DIR/AndroidManifest.xml"
 <?xml version="1.0" encoding="utf-8"?>
