@@ -358,21 +358,22 @@ fn launch_package(app: &slint::android::AndroidApp, package: &str) {
             log::info!("Launching TV package: {} (target: {})", launched_pkg, package);
             let _ = env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[(&intent_obj).into()]);
         } else {
-            log::warn!("Package not found on TV: {}, trying fallback launch", package);
-            if package.contains("store") || package.contains("aurora") {
-                let pkg_jstring = match env.new_string("com.android.vending") {
-                    Ok(s) => s,
-                    Err(_) => return,
-                };
-                if let Ok(val) = env.call_method(&pm, "getLaunchIntentForPackage", "(Ljava/lang/String;)Landroid/content/Intent;", &[(&pkg_jstring).into()]) {
-                    if let Ok(obj) = val.l() {
-                        if !obj.as_raw().is_null() {
-                            let _ = env.call_method(&obj, "addFlags", "(I)Landroid/content/Intent;", &[0x10000000i32.into()]);
-                            let _ = env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[(&obj).into()]);
-                        }
-                    }
-                }
-            }
+            log::warn!("Package not found on TV: {}, launching store search", package);
+            let search_term = match package {
+                p if p.contains("spotify") => "spotify",
+                p if p.contains("amazon") || p.contains("prime") => "prime video",
+                p if p.contains("netflix") => "netflix",
+                p if p.contains("apple") => "apple tv",
+                p if p.contains("youtube") || p.contains("smarttube") => "youtube",
+                p if p.contains("plex") => "plex",
+                p if p.contains("jellyfin") => "jellyfin",
+                p if p.contains("disney") => "disney+",
+                p if p.contains("tubi") => "tubi",
+                p if p.contains("stremio") => "stremio",
+                p if p.contains("store") || p.contains("aurora") => "aurora store",
+                other => other.split('.').last().unwrap_or(other),
+            };
+            launch_store_search(app, search_term);
         }
     }
 }
@@ -1927,6 +1928,220 @@ fn android_main(app: slint::android::AndroidApp) {
             }
             s.dock_frost_cache.borrow_mut().take();
             s.focus_lens_cache.borrow_mut().take();
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // DASHBOARD & INTERACTION CLICK HANDLERS
+    // 1. App Clicked (Dock or List)
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        let app_ref = app_handle.clone();
+        main_window.on_app_clicked(move |idx| {
+            let mut s = state_clone.borrow_mut();
+            let u_idx = idx.max(0) as usize;
+            s.active_zone = "apps";
+            s.selected_app = u_idx;
+            if let Some(win) = window_weak.upgrade() {
+                let apps = win.get_apps();
+                if let Some(item) = apps.row_data(u_idx) {
+                    if item.pkg == "android.settings.SETTINGS" || item.pkg == "settings" || item.id == "settings" {
+                        s.settings_open = true;
+                        s.settings_detail = false;
+                        s.in_appearance_panel = false;
+                        s.selected_setting = 0;
+                    } else {
+                        launch_package(&app_ref, item.pkg.as_str());
+                    }
+                }
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 2. Utilities Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_util_clicked(move |u_idx| {
+            let mut s = state_clone.borrow_mut();
+            s.active_zone = "util";
+            s.selected_util = u_idx.max(0) as usize;
+            match u_idx {
+                0 => {
+                    s.art_mode = true;
+                    s.art_saved_notice = false;
+                }
+                1 => {
+                    s.all_apps_open = true;
+                    s.selected_all_app = 0;
+                    s.all_apps_action_open = false;
+                }
+                2 => {
+                    s.active_zone = "inputs";
+                    s.selected_input = 0;
+                }
+                3 => {
+                    s.settings_open = true;
+                    s.settings_detail = false;
+                    s.in_appearance_panel = false;
+                    s.selected_setting = 0;
+                }
+                _ => {}
+            }
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 3. HDMI Input Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        let app_ref = app_handle.clone();
+        main_window.on_input_clicked(move |h_idx| {
+            let mut s = state_clone.borrow_mut();
+            s.active_zone = "inputs";
+            s.selected_input = h_idx.max(0) as usize;
+            if h_idx >= 0 && (h_idx as usize) < HDMI_IDS.len() {
+                let input_id = HDMI_IDS[h_idx as usize];
+                launch_tv_input(&app_ref, input_id);
+            }
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 4. Media Player Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_media_clicked(move || {
+            let mut s = state_clone.borrow_mut();
+            s.active_zone = "media";
+            s.now_playing_playing = !s.now_playing_playing;
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 5. All Apps Item Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_all_app_clicked(move |idx| {
+            let mut s = state_clone.borrow_mut();
+            s.selected_all_app = idx.max(0) as usize;
+            s.all_apps_action_open = true;
+            s.selected_all_app_action = 0;
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 6. All Apps Action Clicked (0: Launch, 1: Toggle Dock)
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        let app_ref = app_handle.clone();
+        main_window.on_all_app_action_clicked(move |action_idx| {
+            let mut s = state_clone.borrow_mut();
+            s.selected_all_app_action = action_idx.max(0) as usize;
+            if action_idx == 0 {
+                if let Some(win) = window_weak.upgrade() {
+                    let catalog = win.get_all_apps_list();
+                    if let Some(item) = catalog.row_data(s.selected_all_app) {
+                        s.all_apps_open = false;
+                        s.all_apps_action_open = false;
+                        if item.pkg == "android.settings.SETTINGS" || item.pkg == "settings" {
+                            s.settings_open = true;
+                            s.settings_detail = false;
+                            s.in_appearance_panel = false;
+                            s.selected_setting = 0;
+                        } else {
+                            launch_package(&app_ref, item.pkg.as_str());
+                        }
+                    }
+                }
+            } else {
+                let app_idx = s.selected_all_app;
+                if let Some(pos) = s.dock_indices.iter().position(|&x| x == app_idx) {
+                    if s.dock_indices.len() > 1 {
+                        s.dock_indices.remove(pos);
+                        if s.selected_app >= s.dock_indices.len() {
+                            s.selected_app = s.dock_indices.len().saturating_sub(1);
+                        }
+                    }
+                } else {
+                    s.dock_indices.push(app_idx);
+                }
+                if let Some(win) = window_weak.upgrade() {
+                    update_dock_and_all_apps(&win, &mut s);
+                }
+                s.all_apps_action_open = false;
+            }
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 7. Settings Category Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_setting_category_clicked(move |idx| {
+            let mut s = state_clone.borrow_mut();
+            s.selected_setting = idx.max(0) as usize;
+            open_settings_detail(&mut s);
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 8. Settings Back Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_settings_back_clicked(move || {
+            let mut s = state_clone.borrow_mut();
+            handle_settings_back(&mut s);
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // 9. Detail Option Clicked
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        let app_ref = app_handle.clone();
+        main_window.on_detail_option_clicked(move |opt_idx| {
+            let mut s = state_clone.borrow_mut();
+            s.selected_detail_option = opt_idx;
+            if let Some(w) = window_weak.upgrade() {
+                handle_detail_ok(&w, &mut s, &app_ref);
+                sync_ui(&w, &s);
+            }
+        });
+    }
+
+    // 10. Art Mode Clicked (Dismiss)
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_art_mode_clicked(move || {
+            let mut s = state_clone.borrow_mut();
+            s.art_mode = false;
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
             }
