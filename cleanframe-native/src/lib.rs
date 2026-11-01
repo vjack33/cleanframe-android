@@ -148,7 +148,10 @@ pub struct AppState {
     pub typography: &'static str,
     pub material: &'static str,
     pub focus_style: &'static str,
-    pub icon_pack: &'static str,
+    pub icon_pack: String,
+    pub installed_icon_packs: Vec<(String, String)>,
+    pub stock_vector_icons: std::collections::HashMap<String, slint::Image>,
+    pub app_icon_cache: std::cell::RefCell<std::collections::HashMap<String, slint::Image>>,
     pub art_mode: bool,
     pub art_saved_notice: bool,
     pub now_playing_visible: bool,
@@ -392,6 +395,262 @@ fn launch_settings_env(env: &mut jni::JNIEnv, activity: &jni::objects::JObject) 
 }
 
 #[cfg(target_os = "android")]
+fn query_installed_icon_packs(app: &slint::android::AndroidApp) -> Vec<(String, String)> {
+    let mut result = Vec::new();
+    unsafe {
+        let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
+        if vm_ptr.is_null() { return result; }
+        let vm = match jni::JavaVM::from_raw(vm_ptr) {
+            Ok(v) => v,
+            Err(_) => return result,
+        };
+        let mut env = match vm.attach_current_thread() {
+            Ok(e) => e,
+            Err(_) => return result,
+        };
+        let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+
+        let pm = match env.call_method(&activity, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]) {
+            Ok(val) => match val.l() {
+                Ok(obj) => obj,
+                Err(_) => return result,
+            },
+            Err(_) => return result,
+        };
+
+        let intent_class = match env.find_class("android/content/Intent") {
+            Ok(c) => c,
+            Err(_) => return result,
+        };
+
+        let mut seen = std::collections::HashSet::new();
+        let actions = [
+            "org.adw.launcher.THEMES",
+            "com.novalauncher.THEME",
+            "com.gau.go.launcherex.theme",
+            "com.teslacoilsw.launcher.THEME",
+            "com.fede.launcher.THEME_ICONPACK",
+        ];
+
+        for action in actions {
+            if let Ok(act_str) = env.new_string(action) {
+                if let Ok(intent_obj) = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[(&act_str).into()]) {
+                    if let Ok(list_val) = env.call_method(&pm, "queryIntentActivities", "(Landroid/content/Intent;I)Ljava/util/List;", &[(&intent_obj).into(), 0i32.into()]) {
+                        if let Ok(list_obj) = list_val.l() {
+                            if !list_obj.as_raw().is_null() {
+                                if let Ok(size_val) = env.call_method(&list_obj, "size", "()I", &[]) {
+                                    let size = size_val.i().unwrap_or(0);
+                                    for i in 0..size {
+                                        if let Ok(item_val) = env.call_method(&list_obj, "get", "(I)Ljava/lang/Object;", &[i.into()]) {
+                                            if let Ok(resolve_info) = item_val.l() {
+                                                if let Ok(act_info_val) = env.get_field(&resolve_info, "activityInfo", "Landroid/content/pm/ActivityInfo;") {
+                                                    if let Ok(act_info) = act_info_val.l() {
+                                                        if let Ok(pkg_val) = env.get_field(&act_info, "packageName", "Ljava/lang/String;") {
+                                                            if let Ok(pkg_obj) = pkg_val.l() {
+                                                                let pkg_opt = {
+                                                                    let pkg_jstring = jni::objects::JString::from(pkg_obj);
+                                                                    env.get_string(&pkg_jstring).map(|s| s.to_string_lossy().to_string()).ok()
+                                                                };
+                                                                if let Some(pkg) = pkg_opt {
+                                                                    if pkg != "com.cleanframe.tv" && !seen.contains(&pkg) {
+                                                                        seen.insert(pkg.clone());
+                                                                        let mut label = pkg.clone();
+                                                                        if let Ok(label_val) = env.call_method(&resolve_info, "loadLabel", "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;", &[(&pm).into()]) {
+                                                                            if let Ok(label_obj) = label_val.l() {
+                                                                                if !label_obj.as_raw().is_null() {
+                                                                                    if let Ok(s_val) = env.call_method(&label_obj, "toString", "()Ljava/lang/String;", &[]) {
+                                                                                        if let Ok(s_obj) = s_val.l() {
+                                                                                            let lbl_opt = {
+                                                                                                let s_j = jni::objects::JString::from(s_obj);
+                                                                                                env.get_string(&s_j).map(|s| s.to_string_lossy().to_string()).ok()
+                                                                                            };
+                                                                                            if let Some(lbl) = lbl_opt {
+                                                                                                label = lbl;
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        result.push((pkg, label));
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+#[cfg(not(target_os = "android"))]
+fn query_installed_icon_packs(_app: &slint::android::AndroidApp) -> Vec<(String, String)> {
+    vec![
+        ("com.whicons.iconpack".to_string(), "Whicons (White Icons)".to_string()),
+        ("com.delta.iconpack".to_string(), "Delta (Pastel Icons)".to_string()),
+    ]
+}
+
+#[cfg(target_os = "android")]
+fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pkg: Option<&str>) -> Option<slint::Image> {
+    unsafe {
+        let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
+        if vm_ptr.is_null() { return None; }
+        let vm = jni::JavaVM::from_raw(vm_ptr).ok()?;
+        let mut env = vm.attach_current_thread().ok()?;
+        let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+
+        let pm_val = env.call_method(&activity, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]).ok()?;
+        let pm = pm_val.l().ok()?;
+
+        let mut drawable_opt: Option<jni::objects::JObject> = None;
+
+        // 1. Try loading from external icon pack if specified
+        if let Some(pack_pkg) = icon_pack_pkg {
+            if let Ok(pack_str) = env.new_string(pack_pkg) {
+                if let Ok(res_val) = env.call_method(&pm, "getResourcesForApplication", "(Ljava/lang/String;)Landroid/content/res/Resources;", &[(&pack_str).into()]) {
+                    if let Ok(res) = res_val.l() {
+                        let clean_pkg = pkg.replace('.', "_").to_lowercase();
+                        let short_name = pkg.split('.').last().unwrap_or(pkg).to_lowercase();
+                        if let Ok(def_type) = env.new_string("drawable") {
+                            for candidate in [&clean_pkg, &short_name] {
+                                if let Ok(name_str) = env.new_string(candidate) {
+                                    if let Ok(id_val) = env.call_method(&res, "getIdentifier", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I", &[(&name_str).into(), (&def_type).into(), (&pack_str).into()]) {
+                                        let id = id_val.i().unwrap_or(0);
+                                        if id != 0 {
+                                            if let Ok(d_val) = env.call_method(&res, "getDrawable", "(I)Landroid/graphics/drawable/Drawable;", &[id.into()]) {
+                                                if let Ok(d) = d_val.l() {
+                                                    if !d.as_raw().is_null() {
+                                                        drawable_opt = Some(d);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to system application icon
+        if drawable_opt.is_none() {
+            if let Ok(pkg_str) = env.new_string(pkg) {
+                if let Ok(d_val) = env.call_method(&pm, "getApplicationIcon", "(Ljava/lang/String;)Landroid/graphics/drawable/Drawable;", &[(&pkg_str).into()]) {
+                    if let Ok(d) = d_val.l() {
+                        if !d.as_raw().is_null() {
+                            drawable_opt = Some(d);
+                        }
+                    }
+                }
+            }
+        }
+
+        let drawable = drawable_opt?;
+
+        // 3. Render Drawable into Bitmap (96x96 ARGB_8888)
+        let size = 96i32;
+        let config_class = env.find_class("android/graphics/Bitmap$Config").ok()?;
+        let argb_field = env.get_static_field(&config_class, "ARGB_8888", "Landroid/graphics/Bitmap$Config;").ok()?;
+        let argb_obj = argb_field.l().ok()?;
+
+        let bmp_class = env.find_class("android/graphics/Bitmap").ok()?;
+        let bmp_val = env.call_static_method(&bmp_class, "createBitmap", "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;", &[size.into(), size.into(), (&argb_obj).into()]).ok()?;
+        let bmp = bmp_val.l().ok()?;
+
+        let canvas_class = env.find_class("android/graphics/Canvas").ok()?;
+        let canvas = env.new_object(canvas_class, "(Landroid/graphics/Bitmap;)V", &[(&bmp).into()]).ok()?;
+
+        let _ = env.call_method(&drawable, "setBounds", "(IIII)V", &[0i32.into(), 0i32.into(), size.into(), size.into()]);
+        let _ = env.call_method(&drawable, "draw", "(Landroid/graphics/Canvas;)V", &[(&canvas).into()]);
+
+        let byte_buffer_class = env.find_class("java/nio/ByteBuffer").ok()?;
+        let buf_val = env.call_static_method(byte_buffer_class, "allocate", "(I)Ljava/nio/ByteBuffer;", &[(size * size * 4).into()]).ok()?;
+        let buf = buf_val.l().ok()?;
+
+        let _ = env.call_method(&bmp, "copyPixelsToBuffer", "(Ljava/nio/Buffer;)V", &[(&buf).into()]);
+        let array_val = env.call_method(&buf, "array", "()[B", &[]).ok()?;
+        let jbytes = jni::objects::JByteArray::from(array_val.l().ok()?);
+
+        let len = env.get_array_length(&jbytes).ok()? as usize;
+        let mut raw_i8 = vec![0i8; len];
+        env.get_byte_array_region(&jbytes, 0, &mut raw_i8).ok()?;
+        let raw_pixels: Vec<u8> = raw_i8.into_iter().map(|b| b as u8).collect();
+
+        Some(blur::pixels_to_image(&raw_pixels, size as u32, size as u32))
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn load_app_icon_image(_app: &slint::android::AndroidApp, _pkg: &str, _icon_pack: Option<&str>) -> Option<slint::Image> {
+    None
+}
+
+#[cfg(target_os = "android")]
+fn launch_store_search(app: &slint::android::AndroidApp, query: &str) {
+    unsafe {
+        let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
+        if vm_ptr.is_null() { return; }
+        let vm = match jni::JavaVM::from_raw(vm_ptr) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let mut env = match vm.attach_current_thread() {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+
+        let uri_class = match env.find_class("android/net/Uri") {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let uri_str = match env.new_string(format!("market://search?q={}", query)) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let uri_obj = match env.call_static_method(uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[(&uri_str).into()]) {
+            Ok(val) => match val.l() {
+                Ok(o) => o,
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+
+        let intent_class = match env.find_class("android/content/Intent") {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let action_view = match env.new_string("android.intent.action.VIEW") {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        if let Ok(intent) = env.new_object(intent_class, "(Ljava/lang/String;Landroid/net/Uri;)V", &[(&action_view).into(), (&uri_obj).into()]) {
+            let _ = env.call_method(&intent, "addFlags", "(I)Landroid/content/Intent;", &[0x10000000i32.into()]);
+            let _ = env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[(&intent).into()]);
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn launch_store_search(_app: &slint::android::AndroidApp, query: &str) {
+    println!("Mock launch store search for: {}", query);
+}
+
+#[cfg(target_os = "android")]
 fn query_installed_apps(app: &slint::android::AndroidApp) -> Vec<(String, String)> {
     let mut result = Vec::new();
     unsafe {
@@ -545,6 +804,47 @@ fn populate_installed_apps_into_ui(win: &MainWindow, app: &slint::android::Andro
     }
 
     win.set_all_apps_list(full_model.into());
+}
+
+fn apply_icon_pack_to_models(win: &MainWindow, s: &mut AppState, app: &slint::android::AndroidApp) {
+    s.app_icon_cache.borrow_mut().clear();
+    let all_model = win.get_all_apps_list();
+    let total = all_model.row_count();
+    let updated_all = Rc::new(slint::VecModel::default());
+
+    let icon_pack_pkg: Option<String> = if s.icon_pack == "CleanFrame default" || s.icon_pack == "Full Color" || s.icon_pack == "System Default" {
+        None
+    } else {
+        s.installed_icon_packs.iter().find(|(p, name)| *name == s.icon_pack || *p == s.icon_pack).map(|(p, _)| p.clone())
+    };
+
+    for i in 0..total {
+        if let Some(mut item) = all_model.row_data(i) {
+            if s.icon_pack == "CleanFrame default" || s.icon_pack == "Full Color" {
+                if let Some(svg) = s.stock_vector_icons.get(&item.pkg.to_string()) {
+                    item.icon = svg.clone();
+                }
+            } else {
+                // System Default or External Icon Pack
+                let cache_key = format!("{}:{}", s.icon_pack, item.pkg);
+                let mut cache = s.app_icon_cache.borrow_mut();
+                let img = if let Some(cached) = cache.get(&cache_key) {
+                    cached.clone()
+                } else {
+                    let loaded = load_app_icon_image(app, item.pkg.as_str(), icon_pack_pkg.as_deref());
+                    let chosen = loaded.unwrap_or_else(|| {
+                        s.stock_vector_icons.get(&item.pkg.to_string()).cloned().unwrap_or(item.icon.clone())
+                    });
+                    cache.insert(cache_key, chosen.clone());
+                    chosen
+                };
+                item.icon = img;
+            }
+            updated_all.push(item);
+        }
+    }
+    win.set_all_apps_list(updated_all.into());
+    update_dock_and_all_apps(win, s);
 }
 
 fn update_dock_and_all_apps(win: &MainWindow, s: &mut AppState) {
@@ -925,6 +1225,16 @@ fn android_main(app: slint::android::AndroidApp) {
 
     let main_window = MainWindow::new().expect("Failed to create MainWindow");
     display4k::enforce_4k_surface(&app, main_window.window(), &display_info);
+    let installed_icon_packs = query_installed_icon_packs(&app);
+
+    let mut stock_vector_icons = std::collections::HashMap::new();
+    let init_all = main_window.get_all_apps_list();
+    for i in 0..init_all.row_count() {
+        if let Some(item) = init_all.row_data(i) {
+            stock_vector_icons.insert(item.pkg.to_string(), item.icon);
+        }
+    }
+
     let state = Rc::new(RefCell::new(AppState {
         active_zone: "apps",
         selected_app: 3, // Default to Prime Video
@@ -952,7 +1262,10 @@ fn android_main(app: slint::android::AndroidApp) {
         typography: "Manrope",
         material: "Clear",
         focus_style: "Glass Plate",
-        icon_pack: "CleanFrame default",
+        icon_pack: "CleanFrame default".to_string(),
+        installed_icon_packs,
+        stock_vector_icons,
+        app_icon_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
         art_mode: false,
         art_saved_notice: false,
         now_playing_visible: false,
@@ -1110,7 +1423,7 @@ fn android_main(app: slint::android::AndroidApp) {
                 }
             } else if s.settings_open {
                 if s.settings_detail {
-                    let max_opt = get_detail_options_len(s.current_group) as i32 - 1;
+                    let max_opt = get_detail_options_len(&s) as i32 - 1;
                     if s.selected_detail_option < max_opt {
                         s.selected_detail_option += 1;
                     }
@@ -1320,7 +1633,9 @@ fn android_main(app: slint::android::AndroidApp) {
                                 s.dock_frost_cache.borrow_mut().take();
                             }
                             3 => {
-                                s.icon_pack = if s.icon_pack == "CleanFrame default" { "Full Color" } else { "CleanFrame default" };
+                                s.current_group = "icons";
+                                s.selected_detail_option = 0;
+                                s.detail_back_text = "‹ Dock Settings";
                             }
                             _ => {}
                         }
@@ -1451,7 +1766,7 @@ fn android_main(app: slint::android::AndroidApp) {
                     if s.selected_detail_option == -1 {
                         handle_settings_back(&mut s);
                     } else {
-                        handle_detail_ok(&mut s, &app_ref);
+                        if let Some(w) = window_weak.upgrade() { handle_detail_ok(&w, &mut s, &app_ref); }
                     }
                 } else {
                     open_settings_detail(&mut s);
@@ -1639,6 +1954,11 @@ fn handle_settings_back(s: &mut AppState) {
             s.selected_detail_option = 1;
             s.detail_back_text = "‹ Settings";
         }
+        "icons" => {
+            s.current_group = "dock_settings";
+            s.selected_detail_option = 3;
+            s.detail_back_text = "‹ Dock & Navigation";
+        }
         "background" | "typography" => {
             s.current_group = "wallpaper_type";
             s.selected_detail_option = 0;
@@ -1682,8 +2002,8 @@ fn open_settings_detail(s: &mut AppState) {
     }
 }
 
-fn get_detail_options_len(group: &str) -> usize {
-    match group {
+fn get_detail_options_len(s: &AppState) -> usize {
+    match s.current_group {
         "dock_nav" => 2,
         "focus_item" => 4,
         "dock_settings" => 4,
@@ -1695,11 +2015,12 @@ fn get_detail_options_len(group: &str) -> usize {
         "inputs" => HDMI_IDS.len(),
         "samsung" => 2,
         "editor" => 1,
+        "icons" => 3 + s.installed_icon_packs.len() + 1,
         _ => 2,
     }
 }
 
-fn handle_detail_ok(s: &mut AppState, app: &slint::android::AndroidApp) {
+fn handle_detail_ok(win: &MainWindow, s: &mut AppState, app: &slint::android::AndroidApp) {
     match s.current_group {
         "dock_nav" => {
             if s.selected_detail_option == 0 {
@@ -1765,9 +2086,36 @@ fn handle_detail_ok(s: &mut AppState, app: &slint::android::AndroidApp) {
                     s.dock_frost_cache.borrow_mut().take();
                 }
                 3 => {
-                    s.icon_pack = if s.icon_pack == "CleanFrame default" { "Full Color" } else { "CleanFrame default" };
+                    s.current_group = "icons";
+                    s.selected_detail_option = 0;
+                    s.detail_back_text = "‹ Dock Settings";
                 }
                 _ => {}
+            }
+        }
+        "icons" => {
+            let total_installed = s.installed_icon_packs.len();
+            match s.selected_detail_option {
+                0 => {
+                    s.icon_pack = "CleanFrame default".to_string();
+                    apply_icon_pack_to_models(win, s, app);
+                }
+                1 => {
+                    s.icon_pack = "Full Color".to_string();
+                    apply_icon_pack_to_models(win, s, app);
+                }
+                2 => {
+                    s.icon_pack = "System Default".to_string();
+                    apply_icon_pack_to_models(win, s, app);
+                }
+                opt if opt >= 3 && (opt as usize) < 3 + total_installed => {
+                    let idx = opt as usize - 3;
+                    s.icon_pack = s.installed_icon_packs[idx].1.clone();
+                    apply_icon_pack_to_models(win, s, app);
+                }
+                _ => {
+                    launch_store_search(app, "icon pack");
+                }
             }
         }
         "wallpaper_type" => {
@@ -1860,7 +2208,8 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_current_font(s.typography.into());
     win.set_current_material(s.material.into());
     win.set_current_focus_style(s.focus_style.into());
-    win.set_current_icon_pack(s.icon_pack.into());
+    win.set_current_icon_pack(s.icon_pack.clone().into());
+    win.set_is_custom_icon_pack(s.icon_pack != "CleanFrame default" && s.icon_pack != "Full Color");
     win.set_now_playing_visible(s.now_playing_visible);
 
     // Liquid Glass Refraction & Appearance Controls
@@ -2021,10 +2370,48 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                     active: s.blur_level > 0,
                 });
                 list.push(DetailOption {
-                    id: "icons".into(),
+                    id: "nav_icons".into(),
                     title: format!("Icon Pack: {}", s.icon_pack).into(),
-                    desc: "CleanFrame default vs Full Color brand artwork (OK to toggle)".into(),
+                    desc: "CleanFrame default · Full Color · System · Installed Theme Packs (OK to open)".into(),
                     active: s.icon_pack == "CleanFrame default",
+                });
+                win.set_detail_options(list.into());
+            }
+            "icons" => {
+                win.set_detail_title("Icon Pack".into());
+                win.set_detail_desc("Select app icon pack aesthetic or choose an installed theme pack.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "pack_default".into(),
+                    title: "CleanFrame default".into(),
+                    desc: "Minimalist white brand vector silhouettes on liquid glass".into(),
+                    active: s.icon_pack == "CleanFrame default",
+                });
+                list.push(DetailOption {
+                    id: "pack_color".into(),
+                    title: "Full Color".into(),
+                    desc: "Authentic vibrant brand colors on liquid glass plates".into(),
+                    active: s.icon_pack == "Full Color",
+                });
+                list.push(DetailOption {
+                    id: "pack_system".into(),
+                    title: "System Default".into(),
+                    desc: "Original stock application icons extracted from the system".into(),
+                    active: s.icon_pack == "System Default",
+                });
+                for (pkg, name) in &s.installed_icon_packs {
+                    list.push(DetailOption {
+                        id: format!("ext_{}", pkg).into(),
+                        title: name.clone().into(),
+                        desc: format!("External theme pack · {}", pkg).into(),
+                        active: s.icon_pack == *name || s.icon_pack == *pkg,
+                    });
+                }
+                list.push(DetailOption {
+                    id: "nav_store_icons".into(),
+                    title: "+ Browse Icon Packs on Store".into(),
+                    desc: "Discover, install and download new icon packs from Aurora / Play Store".into(),
+                    active: false,
                 });
                 win.set_detail_options(list.into());
             }

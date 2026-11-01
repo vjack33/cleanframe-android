@@ -112,7 +112,8 @@ export component MainWindow inherits Window {
     in property <string> current_font: "Manrope"; // "Manrope" | "Newsreader" | "Geist"
     in property <string> current_material: "Frost"; // "Frost" | "Soft" | "Obsidian Tint" | "Clear"
     in property <string> current_focus_style: "Glass Plate"; // "Glass Plate" | "Round" | "Minimal Type"
-    in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color"
+    in property <string> current_icon_pack: "CleanFrame default"; // "CleanFrame default" | "Full Color" | custom
+    in property <bool> is_custom_icon_pack: false;
     in property <image> dynamic_frost_image;
     in property <image> dock_frost_image;
     in property <image> focus_lens_image;
@@ -258,7 +259,7 @@ export component MainWindow inherits Window {
     property <length> util_squash_h: util_stretch_w * 0.38;
 
     // Settings Categories Morph (Level 0, Vertical)
-    property <length> target_setting_y: root.selected_setting * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 205px);
+    property <length> target_setting_y: root.selected_setting * 66px;
     property <length> setting_lead_y: target_setting_y;
     animate setting_lead_y { duration: 180ms; easing: cubic-bezier(0.12, 0.95, 0.35, 1.0); }
     property <length> setting_trail_y: target_setting_y;
@@ -516,7 +517,7 @@ export component MainWindow inherits Window {
                 height: 48px;
 
                 // App Brand Icon
-                Image {
+                if (!root.is_custom_icon_pack): Image {
                     x: 14px;
                     y: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 9px : 11px;
                     width: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
@@ -527,6 +528,16 @@ export component MainWindow inherits Window {
                         app.brand_color :
                         ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
                         (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.92)));
+
+                    animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
+                }
+                if (root.is_custom_icon_pack): Image {
+                    x: 14px;
+                    y: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 9px : 11px;
+                    width: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
+                    height: (root.active_zone == "apps" && root.selected_app == i && root.current_focus_style == "Minimal Type") ? 30px : 26px;
+                    image-fit: contain;
+                    source: app.icon;
 
                     animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                 }
@@ -643,7 +654,7 @@ export component MainWindow inherits Window {
                         border-radius: 16px;
 
                         // App Brand Icon
-                        Image {
+                        if (!root.is_custom_icon_pack): Image {
                             x: (parent.width - self.width) / 2;
                             y: (root.active_zone == "apps" && root.selected_app == i) ?
                                 (root.current_focus_style == "Minimal Type" ? 14px : (root.current_focus_style == "Round" ? 16px : 18px)) : 20px;
@@ -657,6 +668,19 @@ export component MainWindow inherits Window {
                                 app.brand_color :
                                 ((root.active_zone == "apps" && root.selected_app == i) ? #ffffff :
                                 (root.current_focus_style == "Minimal Type" ? rgba(255, 255, 255, 0.75) : rgba(255, 255, 255, 0.90)));
+
+                            animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
+                        }
+                        if (root.is_custom_icon_pack): Image {
+                            x: (parent.width - self.width) / 2;
+                            y: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 14px : (root.current_focus_style == "Round" ? 16px : 18px)) : 20px;
+                            width: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 40px : (root.current_focus_style == "Round" ? 36px : 34px)) : 30px;
+                            height: (root.active_zone == "apps" && root.selected_app == i) ?
+                                (root.current_focus_style == "Minimal Type" ? 40px : (root.current_focus_style == "Round" ? 36px : 34px)) : 30px;
+                            image-fit: contain;
+                            source: app.icon;
 
                             animate y, width, height { duration: 250ms; easing: cubic-bezier(0.34, 1.45, 0.64, 1.0); }
                         }
@@ -1845,13 +1869,21 @@ export component MainWindow inherits Window {
                                 width: 60px;
                                 height: 56px;
 
-                                Image {
+                                if (!root.is_custom_icon_pack): Image {
                                     x: (parent.width - 22px) / 2;
                                     y: 8px;
                                     width: 22px;
                                     height: 22px;
                                     image-fit: contain;
                                     colorize: (root.current_icon_pack == "Full Color") ? app.brand_color : #ffffff;
+                                    source: app.icon;
+                                }
+                                if (root.is_custom_icon_pack): Image {
+                                    x: (parent.width - 22px) / 2;
+                                    y: 8px;
+                                    width: 22px;
+                                    height: 22px;
+                                    image-fit: contain;
                                     source: app.icon;
                                 }
 
@@ -1891,13 +1923,21 @@ export component MainWindow inherits Window {
                                     background: rgba(255, 255, 255, 0.22);
                                 }
 
-                                Image {
+                                if (!root.is_custom_icon_pack): Image {
                                     x: 6px;
                                     y: 3px;
                                     width: 16px;
                                     height: 16px;
                                     image-fit: contain;
                                     colorize: (root.current_icon_pack == "Full Color") ? app.brand_color : #ffffff;
+                                    source: app.icon;
+                                }
+                                if (root.is_custom_icon_pack): Image {
+                                    x: 6px;
+                                    y: 3px;
+                                    width: 16px;
+                                    height: 16px;
+                                    image-fit: contain;
                                     source: app.icon;
                                 }
 
@@ -2163,7 +2203,7 @@ export component MainWindow inherits Window {
                         }
 
                         // App Brand Icon
-                        Image {
+                        if (!root.is_custom_icon_pack): Image {
                             x: 12px;
                             y: (parent.height - 32px) / 2;
                             width: 32px;
@@ -2173,6 +2213,14 @@ export component MainWindow inherits Window {
                             colorize: (root.current_icon_pack == "Full Color") ?
                                 app.brand_color :
                                 #ffffff;
+                        }
+                        if (root.is_custom_icon_pack): Image {
+                            x: 12px;
+                            y: (parent.height - 32px) / 2;
+                            width: 32px;
+                            height: 32px;
+                            image-fit: contain;
+                            source: app.icon;
                         }
 
                         // App Name
@@ -2238,136 +2286,302 @@ export component MainWindow inherits Window {
             }
 
             // ==========================================
-            // ACTION MODAL POPOVER (when OK is pressed)
+            // ACTION MODAL POPOVER (Apple Liquid Glass Redesign)
             // ==========================================
             if root.all_apps_action_open: Rectangle {
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.55);
+                background: rgba(4, 8, 14, 0.60);
 
                 Rectangle {
-                    x: (parent.width - 340px) / 2;
-                    y: (parent.height - 210px) / 2;
-                    width: 340px;
-                    height: 210px;
-                    border-radius: 20px;
-                    clip: true;
+                    x: (parent.width - 380px) / 2;
+                    y: (parent.height - 232px) / 2;
+                    width: 380px;
+                    height: 232px;
 
-                    // Modal Glass Substrate
-                    Rectangle {
+                    // Liquid Glass Substrate Panel
+                    LiquidGlassPanel {
                         width: 100%;
                         height: 100%;
-                        background: rgba(24, 28, 38, 0.95);
-                        border-radius: 20px;
-                        border-width: 1px;
-                        border-color: rgba(255, 255, 255, 0.25);
+                        border-radius: 22px;
+                        frost_image: root.dynamic_frost_image;
+                        origin_x: (root.width - 380px) / 2;
+                        origin_y: (root.height - 232px) / 2;
+                        glass_tint: @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 28%, rgba(14, 18, 24, 0.72) 65%, rgba(8, 12, 16, 0.90) 100%);
+                        rim_color: rgba(255, 255, 255, 0.35);
+                        rim_width: 1.0px;
+                        show_specular_hairline: true;
                     }
 
-                    // Specular Rim
+                    // App Header
                     Rectangle {
-                        x: 12px;
-                        y: 1px;
-                        width: parent.width - 24px;
-                        height: 1.25px;
-                        background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.90) 50%, rgba(255, 255, 255, 0.0) 100%);
-                    }
-
-                    // App Header in Modal
-                    if (root.selected_all_app < root.all_apps_list.length): Image {
                         x: 20px;
-                        y: 18px;
-                        width: 34px;
-                        height: 34px;
-                        image-fit: contain;
-                        source: root.all_apps_list[root.selected_all_app].icon;
-                        colorize: (root.current_icon_pack == "Full Color") ?
-                            root.all_apps_list[root.selected_all_app].brand_color :
-                            #ffffff;
-                    }
-
-                    if (root.selected_all_app < root.all_apps_list.length): Text {
-                        x: 64px;
                         y: 16px;
-                        width: parent.width - 80px;
-                        text: root.all_apps_list[root.selected_all_app].name;
-                        font-size: 15px;
-                        font-weight: 700;
-                        color: #ffffff;
-                        overflow: elide;
-                    }
-
-                    if (root.selected_all_app < root.all_apps_list.length): Text {
-                        x: 64px;
-                        y: 36px;
-                        width: parent.width - 80px;
-                        text: root.all_apps_list[root.selected_all_app].pkg;
-                        font-size: 10px;
-                        color: rgba(255, 255, 255, 0.60);
-                        overflow: elide;
-                    }
-
-                    // Action 0: Launch App Button
-                    Rectangle {
-                        x: 20px;
-                        y: 72px;
                         width: parent.width - 40px;
-                        height: 40px;
-                        border-radius: 12px;
-                        background: (root.selected_all_app_action == 0) ?
-                            #0088FF :
-                            rgba(120, 120, 128, 0.28);
-                        border-width: (root.selected_all_app_action == 0) ? 1.5px : 0px;
-                        border-color: #ffffff;
+                        height: 48px;
 
-                        Text {
-                            width: 100%;
-                            height: 100%;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            text: "▶   Launch Application";
-                            font-size: 13px;
+                        // App Icon Badge
+                        Rectangle {
+                            x: 0px;
+                            y: 2px;
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 12px;
+                            background: rgba(255, 255, 255, 0.10);
+                            clip: true;
+
+                            // Specular Top Sheen
+                            Rectangle {
+                                x: 1px;
+                                y: 1px;
+                                width: parent.width - 2px;
+                                height: parent.height * 0.45;
+                                border-radius: 11px;
+                                background: @linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.0) 100%);
+                            }
+
+                            if (!root.is_custom_icon_pack && root.selected_all_app < root.all_apps_list.length): Image {
+                                x: 6px;
+                                y: 6px;
+                                width: 32px;
+                                height: 32px;
+                                image-fit: contain;
+                                source: root.all_apps_list[root.selected_all_app].icon;
+                                colorize: (root.current_icon_pack == "Full Color") ?
+                                    root.all_apps_list[root.selected_all_app].brand_color :
+                                    #ffffff;
+                            }
+                            if (root.is_custom_icon_pack && root.selected_all_app < root.all_apps_list.length): Image {
+                                x: 6px;
+                                y: 6px;
+                                width: 32px;
+                                height: 32px;
+                                image-fit: contain;
+                                source: root.all_apps_list[root.selected_all_app].icon;
+                            }
+                        }
+
+                        // App Title & Package
+                        if (root.selected_all_app < root.all_apps_list.length): Text {
+                            x: 56px;
+                            y: 4px;
+                            width: parent.width - 150px;
+                            text: root.all_apps_list[root.selected_all_app].name;
+                            font-size: 15px;
                             font-weight: 700;
                             color: #ffffff;
+                            overflow: elide;
+                        }
+
+                        if (root.selected_all_app < root.all_apps_list.length): Text {
+                            x: 56px;
+                            y: 26px;
+                            width: parent.width - 150px;
+                            text: root.all_apps_list[root.selected_all_app].pkg;
+                            font-size: 10px;
+                            font-weight: 400;
+                            color: rgba(255, 255, 255, 0.60);
+                            overflow: elide;
+                        }
+
+                        // Dock Status Pill (Top Right)
+                        Rectangle {
+                            x: parent.width - 86px;
+                            y: 10px;
+                            width: 86px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: (root.selected_all_app < root.all_apps_list.length && root.all_apps_list[root.selected_all_app].in_dock) ?
+                                rgba(52, 199, 89, 0.20) :
+                                rgba(255, 255, 255, 0.10);
+
+                            Text {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                                text: (root.selected_all_app < root.all_apps_list.length && root.all_apps_list[root.selected_all_app].in_dock) ?
+                                    "★ In Dock" :
+                                    "Unpinned";
+                                font-size: 10px;
+                                font-weight: 600;
+                                color: (root.selected_all_app < root.all_apps_list.length && root.all_apps_list[root.selected_all_app].in_dock) ?
+                                    #34C759 :
+                                    rgba(255, 255, 255, 0.65);
+                            }
                         }
                     }
 
-                    // Action 1: Add to / Remove from Dock Button
+                    // Action 0: Launch App
                     Rectangle {
                         x: 20px;
-                        y: 122px;
+                        y: 76px;
                         width: parent.width - 40px;
-                        height: 40px;
-                        border-radius: 12px;
-                        background: (root.selected_all_app_action == 1) ?
-                            #0088FF :
-                            rgba(120, 120, 128, 0.28);
-                        border-width: (root.selected_all_app_action == 1) ? 1.5px : 0px;
-                        border-color: #ffffff;
+                        height: 46px;
+                        border-radius: 13px;
+                        clip: true;
 
-                        Text {
+                        // Focused Liquid Glass Selection
+                        if (root.selected_all_app_action == 0): Rectangle {
                             width: 100%;
                             height: 100%;
+
+                            Image {
+                                x: -((root.width - 380px) / 2 + 20px);
+                                y: -((root.height - 232px) / 2 + 76px);
+                                width: root.width;
+                                height: root.height;
+                                image-fit: cover;
+                                source: root.dynamic_frost_image;
+                            }
+
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                background: rgba(255, 255, 255, 0.16);
+                            }
+
+                            Rectangle {
+                                x: 4px;
+                                y: 1px;
+                                width: parent.width - 8px;
+                                height: parent.height * 0.45;
+                                border-radius: 10px;
+                                background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                            }
+
+                            Rectangle {
+                                x: 8px;
+                                y: 1px;
+                                width: parent.width - 16px;
+                                height: 1px;
+                                background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0.0) 100%);
+                            }
+                        }
+
+                        if (root.selected_all_app_action != 0): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(255, 255, 255, 0.06);
+                        }
+
+                        Text {
+                            x: 16px;
+                            y: 0px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            text: "▶   Launch Application";
+                            font-size: 13px;
+                            font-weight: (root.selected_all_app_action == 0) ? 700 : 500;
+                            color: #ffffff;
+                        }
+
+                        Text {
+                            x: parent.width - 28px;
+                            y: 0px;
+                            width: 16px;
+                            height: parent.height;
                             vertical-alignment: center;
                             horizontal-alignment: center;
+                            text: "›";
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: (root.selected_all_app_action == 0) ? #ffffff : rgba(255, 255, 255, 0.35);
+                        }
+                    }
+
+                    // Action 1: Toggle Dock
+                    Rectangle {
+                        x: 20px;
+                        y: 130px;
+                        width: parent.width - 40px;
+                        height: 46px;
+                        border-radius: 13px;
+                        clip: true;
+
+                        // Focused Liquid Glass Selection
+                        if (root.selected_all_app_action == 1): Rectangle {
+                            width: 100%;
+                            height: 100%;
+
+                            Image {
+                                x: -((root.width - 380px) / 2 + 20px);
+                                y: -((root.height - 232px) / 2 + 130px);
+                                width: root.width;
+                                height: root.height;
+                                image-fit: cover;
+                                source: root.dynamic_frost_image;
+                            }
+
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                background: rgba(255, 255, 255, 0.16);
+                            }
+
+                            Rectangle {
+                                x: 4px;
+                                y: 1px;
+                                width: parent.width - 8px;
+                                height: parent.height * 0.45;
+                                border-radius: 10px;
+                                background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                            }
+
+                            Rectangle {
+                                x: 8px;
+                                y: 1px;
+                                width: parent.width - 16px;
+                                height: 1px;
+                                background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0.0) 100%);
+                            }
+                        }
+
+                        if (root.selected_all_app_action != 1): Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(255, 255, 255, 0.06);
+                        }
+
+                        Text {
+                            x: 16px;
+                            y: 0px;
+                            height: parent.height;
+                            vertical-alignment: center;
                             text: (root.selected_all_app < root.all_apps_list.length && root.all_apps_list[root.selected_all_app].in_dock) ?
-                                "✕   Remove from Dock" :
+                                "−   Remove from Home Dock" :
                                 "★   Add to Home Dock";
                             font-size: 13px;
-                            font-weight: 700;
+                            font-weight: (root.selected_all_app_action == 1) ? 700 : 500;
                             color: #ffffff;
+                        }
+
+                        Text {
+                            x: parent.width - 28px;
+                            y: 0px;
+                            width: 16px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            text: "›";
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: (root.selected_all_app_action == 1) ? #ffffff : rgba(255, 255, 255, 0.35);
                         }
                     }
 
                     // Modal Dismiss Hint
                     Text {
                         x: 20px;
-                        y: 174px;
+                        y: 192px;
                         width: parent.width - 40px;
                         horizontal-alignment: center;
-                        text: "Up / Down Choose  ·  OK Confirm  ·  Back Cancel";
-                        font-size: 10px;
+                        text: "OK Select  ·  Back Cancel";
+                        font-size: 11px;
                         font-weight: 500;
-                        color: rgba(255, 255, 255, 0.50);
+                        color: rgba(255, 255, 255, 0.55);
                     }
                 }
             }

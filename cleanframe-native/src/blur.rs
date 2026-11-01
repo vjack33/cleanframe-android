@@ -436,7 +436,7 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
     }
 }
 
-fn pixels_to_image(pixels: &[u8], width: u32, height: u32) -> Image {
+pub(crate) fn pixels_to_image(pixels: &[u8], width: u32, height: u32) -> Image {
     let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width, height);
     let slice = buffer.make_mut_slice();
     for (i, chunk) in pixels.chunks_exact(4).enumerate() {
