@@ -160,21 +160,14 @@ pub struct AppState {
     pub all_apps_action_open: bool,
     pub selected_all_app_action: usize,
     pub dock_indices: Vec<usize>,
-    pub frost_cache: std::cell::RefCell<std::collections::HashMap<usize, (slint::Image, slint::Image)>>,
+    pub detail_back_text: &'static str,
+    pub base_blur_cache: std::cell::RefCell<std::collections::HashMap<(usize, usize), (Vec<u8>, slint::Image)>>,
+    pub dock_frost_cache: std::cell::RefCell<Option<(usize, usize, u32, slint::Image, slint::Image)>>,
     pub focus_lens_cache: std::cell::RefCell<Option<(slint::Image, slint::Image, slint::Image)>>,
 }
 
 impl AppState {
     pub fn get_frost_images(&self, idx: usize) -> (slint::Image, slint::Image) {
-        let mut cache = self.frost_cache.borrow_mut();
-        if let Some(pair) = cache.get(&idx) {
-            return pair.clone();
-        }
-        let bytes = if idx < WALLPAPER_FULL.len() {
-            WALLPAPER_FULL[idx]
-        } else {
-            WALLPAPER_FULL[0]
-        };
         let radius = if self.reduce_transparency {
             28
         } else if self.appearance_preset == "Clear" {
@@ -185,12 +178,37 @@ impl AppState {
             12
         };
         let ref_dist = self.refraction * 48.0;
-        if let Some(pair) = blur::blur_wallpaper_bytes_pair(bytes, radius, ref_dist) {
-            cache.insert(idx, pair.clone());
-            pair
-        } else {
-            (slint::Image::default(), slint::Image::default())
+        let ref_key = (ref_dist * 1000.0) as u32;
+
+        let mut dock_cache = self.dock_frost_cache.borrow_mut();
+        if let Some((c_idx, c_rad, c_ref, ref clean_img, ref dock_img)) = *dock_cache {
+            if c_idx == idx && c_rad == radius && c_ref == ref_key {
+                return (clean_img.clone(), dock_img.clone());
+            }
         }
+
+        // Fast base wallpaper lookup or computation (runs once per wallpaper/radius)
+        let mut base_cache = self.base_blur_cache.borrow_mut();
+        let (pixels, clean_img) = if let Some(entry) = base_cache.get(&(idx, radius)) {
+            (entry.0.clone(), entry.1.clone())
+        } else {
+            let bytes = if idx < WALLPAPER_FULL.len() {
+                WALLPAPER_FULL[idx]
+            } else {
+                WALLPAPER_FULL[0]
+            };
+            if let Some((p, img)) = blur::compute_base_blurred_wallpaper(bytes, radius) {
+                base_cache.insert((idx, radius), (p.clone(), img.clone()));
+                (p, img)
+            } else {
+                return (slint::Image::default(), slint::Image::default());
+            }
+        };
+
+        // Instant optical Snell refraction applied directly on pre-blurred buffer (< 1ms CPU)
+        let dock_img = blur::compute_refracted_dock_image(&pixels, ref_dist);
+        *dock_cache = Some((idx, radius, ref_key, clean_img.clone(), dock_img.clone()));
+        (clean_img, dock_img)
     }
 
     pub fn get_frost_image(&self, idx: usize) -> slint::Image {
@@ -916,7 +934,7 @@ fn android_main(app: slint::android::AndroidApp) {
         selected_detail_option: 0,
         settings_open: false,
         settings_detail: false,
-        current_group: "appearance",
+        current_group: "dock_nav",
         wallpaper_idx: 6, // Bridge at dusk
         refraction: 1.00, // DEFAULT: 1.00 (liquid-rust demo exact default)
         appearance_preset: "Clear", // DEFAULT: Clear (Apple kit Clear glass)
@@ -946,7 +964,9 @@ fn android_main(app: slint::android::AndroidApp) {
         all_apps_action_open: false,
         selected_all_app_action: 0,
         dock_indices: vec![0, 1, 2, 3, 4, 5, 6, 7],
-        frost_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        detail_back_text: "‹ Settings",
+        base_blur_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        dock_frost_cache: std::cell::RefCell::new(None),
         focus_lens_cache: std::cell::RefCell::new(None),
     }));
 
@@ -1026,17 +1046,7 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.selected_all_app -= 4;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    if (8..=10).contains(&s.appearance_focus_index) {
-                        s.appearance_focus_index -= 3;
-                    } else if (5..=7).contains(&s.appearance_focus_index) {
-                        s.appearance_focus_index = 4;
-                    } else if s.appearance_focus_index == 4 {
-                        s.appearance_focus_index = 3;
-                    } else if s.appearance_focus_index == 3 {
-                        s.appearance_focus_index = match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 };
-                    }
-                } else if s.settings_detail {
+                if s.settings_detail {
                     if s.selected_detail_option > -1 {
                         s.selected_detail_option -= 1;
                     }
@@ -1099,22 +1109,12 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.selected_all_app += 4;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    if (0..=2).contains(&s.appearance_focus_index) {
-                        s.appearance_focus_index = 3;
-                    } else if s.appearance_focus_index == 3 {
-                        s.appearance_focus_index = 4;
-                    } else if s.appearance_focus_index == 4 {
-                        s.appearance_focus_index = 5;
-                    } else if (5..=7).contains(&s.appearance_focus_index) {
-                        s.appearance_focus_index += 3;
-                    }
-                } else if s.settings_detail {
+                if s.settings_detail {
                     let max_opt = get_detail_options_len(s.current_group) as i32 - 1;
                     if s.selected_detail_option < max_opt {
                         s.selected_detail_option += 1;
                     }
-                } else if s.selected_setting < 12 {
+                } else if s.selected_setting < 3 {
                     s.selected_setting += 1;
                 }
             } else if s.layout_mode == "Dock" {
@@ -1169,41 +1169,44 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.selected_all_app -= 1;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    if s.appearance_focus_index == 3 {
-                        s.refraction = (s.refraction - 0.05).max(0.0);
-                        s.frost_cache.borrow_mut().clear();
-                        s.focus_lens_cache.borrow_mut().take();
-                    } else if s.appearance_focus_index == 4 {
-                        s.transparency = (s.transparency - 0.05).max(0.0);
-                        s.frost_cache.borrow_mut().clear();
-                        s.focus_lens_cache.borrow_mut().take();
-                    } else if (0..=2).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index > 0 {
-                            s.appearance_focus_index -= 1;
-                            s.appearance_preset = match s.appearance_focus_index { 1 => "Regular", _ => "Clear" };
-                            s.material = s.appearance_preset;
-                            s.transparency = if s.appearance_preset == "Clear" { 0.0 } else { 0.5 };
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        } else {
-                            s.in_appearance_panel = false;
+                if s.settings_detail {
+                    if s.selected_detail_option == -1 {
+                        handle_settings_back(&mut s);
+                    } else if s.current_group == "focus_item" {
+                        match s.selected_detail_option {
+                            0 => {
+                                s.focus_style = match s.focus_style {
+                                    "Minimal Type" => "Round",
+                                    "Round" => "Glass Plate",
+                                    _ => "Minimal Type",
+                                };
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            1 => {
+                                s.refraction = (s.refraction - 0.05).max(0.0);
+                                s.dock_frost_cache.borrow_mut().take();
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            2 => {
+                                s.appearance_preset = match s.appearance_preset {
+                                    "Tinted" => "Regular",
+                                    "Regular" => "Clear",
+                                    _ => "Tinted",
+                                };
+                                s.material = s.appearance_preset;
+                                s.transparency = if s.appearance_preset == "Clear" { 0.0 } else if s.appearance_preset == "Regular" { 0.5 } else { 0.85 };
+                                s.dock_frost_cache.borrow_mut().take();
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            3 => {
+                                s.transparency = (s.transparency - 0.05).max(0.0);
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            _ => handle_settings_back(&mut s),
                         }
-                    } else if (5..=7).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index > 5 {
-                            s.appearance_focus_index -= 1;
-                        } else {
-                            s.in_appearance_panel = false;
-                        }
-                    } else if (8..=10).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index > 8 {
-                            s.appearance_focus_index -= 1;
-                        } else {
-                            s.in_appearance_panel = false;
-                        }
+                    } else {
+                        handle_settings_back(&mut s);
                     }
-                } else if s.settings_detail {
-                    s.settings_detail = false;
                 } else {
                     s.settings_open = false;
                 }
@@ -1254,45 +1257,102 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.selected_all_app += 1;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    if s.appearance_focus_index == 3 {
-                        s.refraction = (s.refraction + 0.05).min(1.0);
-                        s.frost_cache.borrow_mut().clear();
-                        s.focus_lens_cache.borrow_mut().take();
-                    } else if s.appearance_focus_index == 4 {
-                        s.transparency = (s.transparency + 0.05).min(1.0);
-                        s.frost_cache.borrow_mut().clear();
-                        s.focus_lens_cache.borrow_mut().take();
-                    } else if (0..=2).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index < 2 {
-                            s.appearance_focus_index += 1;
-                            s.appearance_preset = match s.appearance_focus_index { 1 => "Regular", _ => "Tinted" };
-                            s.material = s.appearance_preset;
-                            s.transparency = if s.appearance_preset == "Tinted" { 0.85 } else { 0.5 };
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
+                if s.settings_detail {
+                    if s.current_group == "dock_nav" {
+                        if s.selected_detail_option == 0 {
+                            s.current_group = "focus_item";
+                            s.selected_detail_option = 0;
+                            s.detail_back_text = "‹ Dock & Navigation";
+                        } else {
+                            s.current_group = "dock_settings";
+                            s.selected_detail_option = 0;
+                            s.detail_back_text = "‹ Dock & Navigation";
                         }
-                    } else if (5..=7).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index < 7 {
-                            s.appearance_focus_index += 1;
+                    } else if s.current_group == "focus_item" {
+                        match s.selected_detail_option {
+                            0 => {
+                                s.focus_style = match s.focus_style {
+                                    "Glass Plate" => "Round",
+                                    "Round" => "Minimal Type",
+                                    _ => "Glass Plate",
+                                };
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            1 => {
+                                s.refraction = (s.refraction + 0.05).min(1.0);
+                                s.dock_frost_cache.borrow_mut().take();
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            2 => {
+                                s.appearance_preset = match s.appearance_preset {
+                                    "Clear" => "Regular",
+                                    "Regular" => "Tinted",
+                                    _ => "Clear",
+                                };
+                                s.material = s.appearance_preset;
+                                s.transparency = if s.appearance_preset == "Clear" { 0.0 } else if s.appearance_preset == "Regular" { 0.5 } else { 0.85 };
+                                s.dock_frost_cache.borrow_mut().take();
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            3 => {
+                                s.transparency = (s.transparency + 0.05).min(1.0);
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            _ => {}
                         }
-                    } else if (8..=10).contains(&s.appearance_focus_index) {
-                        if s.appearance_focus_index < 10 {
-                            s.appearance_focus_index += 1;
+                    } else if s.current_group == "dock_settings" {
+                        match s.selected_detail_option {
+                            0 => {
+                                s.layout_mode = if s.layout_mode == "Dock" { "List" } else { "Dock" };
+                            }
+                            1 => {
+                                s.material = match s.material {
+                                    "Frost" => "Soft",
+                                    "Soft" => "Obsidian Tint",
+                                    "Obsidian Tint" => "Clear",
+                                    _ => "Frost",
+                                };
+                                s.focus_lens_cache.borrow_mut().take();
+                            }
+                            2 => {
+                                s.blur_level = (s.blur_level + 1) % BLUR_LEVEL_NAMES.len();
+                                s.base_blur_cache.borrow_mut().clear();
+                                s.dock_frost_cache.borrow_mut().take();
+                            }
+                            3 => {
+                                s.icon_pack = if s.icon_pack == "CleanFrame default" { "Full Color" } else { "CleanFrame default" };
+                            }
+                            _ => {}
+                        }
+                    } else if s.current_group == "wallpaper_type" {
+                        if s.selected_detail_option == 0 {
+                            s.current_group = "background";
+                            s.selected_detail_option = s.wallpaper_idx as i32;
+                            s.detail_back_text = "‹ Wallpaper & Typography";
+                        } else {
+                            s.typography = match s.typography {
+                                "Manrope" => "Newsreader",
+                                "Newsreader" => "Geist",
+                                _ => "Manrope",
+                            };
+                        }
+                    } else if s.current_group == "system_inputs" {
+                        if s.selected_detail_option == 0 {
+                            s.current_group = "inputs";
+                            s.selected_detail_option = 0;
+                            s.detail_back_text = "‹ System & Inputs";
+                        } else if s.selected_detail_option == 1 {
+                            s.all_apps_open = true;
+                            s.selected_all_app = 0;
+                            s.settings_open = false;
+                        } else {
+                            s.current_group = "samsung";
+                            s.selected_detail_option = 0;
+                            s.detail_back_text = "‹ System & Inputs";
                         }
                     }
-                } else if !s.settings_detail {
-                    if s.selected_setting <= 3 {
-                        s.in_appearance_panel = true;
-                        s.appearance_focus_index = match s.selected_setting {
-                            0 => match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 },
-                            1 => 3,
-                            2 => 4,
-                            _ => 5,
-                        };
-                    } else {
-                        open_settings_detail(&mut s);
-                    }
+                } else {
+                    open_settings_detail(&mut s);
                 }
             } else if s.layout_mode == "Dock" {
                 if s.active_zone == "apps" {
@@ -1387,67 +1447,12 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.selected_all_app_action = 0;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    match s.appearance_focus_index {
-                        0 => {
-                            s.appearance_preset = "Clear";
-                            s.material = "Clear";
-                            s.transparency = 0.0;
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        }
-                        1 => {
-                            s.appearance_preset = "Regular";
-                            s.material = "Regular";
-                            s.transparency = 0.5;
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        }
-                        2 => {
-                            s.appearance_preset = "Tinted";
-                            s.material = "Tinted";
-                            s.transparency = 0.85;
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        }
-                        5 => {
-                            s.dark_mode = !s.dark_mode;
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        }
-                        6 => {
-                            s.increase_contrast = !s.increase_contrast;
-                        }
-                        7 => {
-                            s.reduce_motion = !s.reduce_motion;
-                        }
-                        8 => {
-                            s.reduce_transparency = !s.reduce_transparency;
-                            s.frost_cache.borrow_mut().clear();
-                            s.focus_lens_cache.borrow_mut().take();
-                        }
-                        9 => {
-                            s.physics = !s.physics;
-                        }
-                        10 => {
-                            s.liquid_merge = !s.liquid_merge;
-                        }
-                        _ => {}
-                    }
-                } else if s.settings_detail {
+                if s.settings_detail {
                     if s.selected_detail_option == -1 {
-                        s.settings_detail = false;
+                        handle_settings_back(&mut s);
                     } else {
-                        apply_detail_choice(&mut s, &app_ref);
+                        handle_detail_ok(&mut s, &app_ref);
                     }
-                } else if s.selected_setting <= 3 {
-                    s.in_appearance_panel = true;
-                    s.appearance_focus_index = match s.selected_setting {
-                        0 => match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 },
-                        1 => 3,
-                        2 => 4,
-                        _ => 5,
-                    };
                 } else {
                     open_settings_detail(&mut s);
                 }
@@ -1519,10 +1524,8 @@ fn android_main(app: slint::android::AndroidApp) {
                     s.all_apps_open = false;
                 }
             } else if s.settings_open {
-                if s.in_appearance_panel {
-                    s.in_appearance_panel = false;
-                } else if s.settings_detail {
-                    s.settings_detail = false;
+                if s.settings_detail {
+                    handle_settings_back(&mut s);
                 } else {
                     s.settings_open = false;
                 }
@@ -1542,7 +1545,7 @@ fn android_main(app: slint::android::AndroidApp) {
         main_window.on_set_refraction(move |val| {
             let mut s = state_clone.borrow_mut();
             s.refraction = val.clamp(0.0, 1.0);
-            s.frost_cache.borrow_mut().clear();
+            s.dock_frost_cache.borrow_mut().take();
             s.focus_lens_cache.borrow_mut().take();
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
@@ -1557,7 +1560,6 @@ fn android_main(app: slint::android::AndroidApp) {
         main_window.on_set_transparency(move |val| {
             let mut s = state_clone.borrow_mut();
             s.transparency = val.clamp(0.0, 1.0);
-            s.frost_cache.borrow_mut().clear();
             s.focus_lens_cache.borrow_mut().take();
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
@@ -1585,7 +1587,7 @@ fn android_main(app: slint::android::AndroidApp) {
             } else {
                 s.transparency = 0.85;
             }
-            s.frost_cache.borrow_mut().clear();
+            s.dock_frost_cache.borrow_mut().take();
             s.focus_lens_cache.borrow_mut().take();
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
@@ -1608,7 +1610,7 @@ fn android_main(app: slint::android::AndroidApp) {
                 "liquid_merge" => s.liquid_merge = !s.liquid_merge,
                 _ => {}
             }
-            s.frost_cache.borrow_mut().clear();
+            s.dock_frost_cache.borrow_mut().take();
             s.focus_lens_cache.borrow_mut().take();
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
@@ -1625,117 +1627,200 @@ fn android_main(app: slint::android::AndroidApp) {
     main_window.run().expect("Slint window run failed");
 }
 
-fn open_settings_detail(s: &mut AppState) {
-    s.settings_detail = true;
-    match s.selected_setting {
-        4 => {
-            s.current_group = "background";
-            s.selected_detail_option = s.wallpaper_idx as i32;
-        }
-        5 => {
-            s.current_group = "layout";
-            s.selected_detail_option = if s.layout_mode == "List" { 0 } else { 1 };
-        }
-        6 => {
-            s.current_group = "blur";
-            s.selected_detail_option = s.blur_level as i32;
-        }
-        7 => {
-            s.current_group = "focus";
-            s.selected_detail_option = match s.focus_style {
-                "Round" => 1,
-                "Minimal Type" => 2,
-                _ => 0,
-            };
-        }
-        8 => {
-            s.current_group = "typography";
-            s.selected_detail_option = match s.typography {
-                "Manrope" => 0,
-                "Newsreader" => 1,
-                _ => 2,
-            };
-        }
-        9 => {
-            s.current_group = "icons";
-            s.selected_detail_option = if s.icon_pack == "CleanFrame default" { 0 } else { 1 };
-        }
-        10 => {
-            s.current_group = "inputs";
+fn handle_settings_back(s: &mut AppState) {
+    match s.current_group {
+        "focus_item" => {
+            s.current_group = "dock_nav";
             s.selected_detail_option = 0;
+            s.detail_back_text = "‹ Settings";
         }
-        11 => {
-            s.current_group = "editor";
-            s.selected_detail_option = 0;
+        "dock_settings" => {
+            s.current_group = "dock_nav";
+            s.selected_detail_option = 1;
+            s.detail_back_text = "‹ Settings";
         }
-        12 => {
-            s.current_group = "samsung";
+        "background" | "typography" => {
+            s.current_group = "wallpaper_type";
             s.selected_detail_option = 0;
+            s.detail_back_text = "‹ Settings";
+        }
+        "inputs" | "samsung" | "editor" => {
+            s.current_group = "system_inputs";
+            s.selected_detail_option = 0;
+            s.detail_back_text = "‹ Settings";
         }
         _ => {
-            s.current_group = "background";
-            s.selected_detail_option = 0;
+            s.settings_detail = false;
+        }
+    }
+}
+
+fn open_settings_detail(s: &mut AppState) {
+    s.settings_detail = true;
+    s.selected_detail_option = 0;
+    match s.selected_setting {
+        0 => {
+            s.current_group = "dock_nav";
+            s.detail_back_text = "‹ Settings";
+        }
+        1 => {
+            s.current_group = "wallpaper_type";
+            s.detail_back_text = "‹ Settings";
+        }
+        2 => {
+            s.current_group = "visual_effects";
+            s.detail_back_text = "‹ Settings";
+        }
+        3 => {
+            s.current_group = "system_inputs";
+            s.detail_back_text = "‹ Settings";
+        }
+        _ => {
+            s.current_group = "dock_nav";
+            s.detail_back_text = "‹ Settings";
         }
     }
 }
 
 fn get_detail_options_len(group: &str) -> usize {
     match group {
+        "dock_nav" => 2,
+        "focus_item" => 4,
+        "dock_settings" => 4,
+        "wallpaper_type" => 2,
+        "visual_effects" => 6,
+        "system_inputs" => 3,
         "background" => WALLPAPERS.len(),
-        "layout" => 2,
-        "blur" => BLUR_LEVEL_NAMES.len(),
-        "focus" => 3,
         "typography" => 3,
-        "icons" => 2,
-        "material" => 4,
-        "inputs" => 4,
-        "editor" => 1,
+        "inputs" => HDMI_IDS.len(),
         "samsung" => 2,
+        "editor" => 1,
         _ => 2,
     }
 }
 
-fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
+fn handle_detail_ok(s: &mut AppState, app: &slint::android::AndroidApp) {
     match s.current_group {
+        "dock_nav" => {
+            if s.selected_detail_option == 0 {
+                s.current_group = "focus_item";
+                s.selected_detail_option = 0;
+                s.detail_back_text = "‹ Dock & Navigation";
+            } else {
+                s.current_group = "dock_settings";
+                s.selected_detail_option = 0;
+                s.detail_back_text = "‹ Dock & Navigation";
+            }
+        }
+        "focus_item" => {
+            match s.selected_detail_option {
+                0 => {
+                    s.focus_style = match s.focus_style {
+                        "Glass Plate" => "Round",
+                        "Round" => "Minimal Type",
+                        _ => "Glass Plate",
+                    };
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                1 => {
+                    s.refraction = if s.refraction >= 1.0 { 0.0 } else { (s.refraction + 0.25).min(1.0) };
+                    s.dock_frost_cache.borrow_mut().take();
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                2 => {
+                    s.appearance_preset = match s.appearance_preset {
+                        "Clear" => "Regular",
+                        "Regular" => "Tinted",
+                        _ => "Clear",
+                    };
+                    s.material = s.appearance_preset;
+                    s.transparency = if s.appearance_preset == "Clear" { 0.0 } else if s.appearance_preset == "Regular" { 0.5 } else { 0.85 };
+                    s.dock_frost_cache.borrow_mut().take();
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                3 => {
+                    s.transparency = if s.transparency >= 1.0 { 0.0 } else { (s.transparency + 0.25).min(1.0) };
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                _ => {}
+            }
+        }
+        "dock_settings" => {
+            match s.selected_detail_option {
+                0 => {
+                    s.layout_mode = if s.layout_mode == "Dock" { "List" } else { "Dock" };
+                }
+                1 => {
+                    s.material = match s.material {
+                        "Frost" => "Soft",
+                        "Soft" => "Obsidian Tint",
+                        "Obsidian Tint" => "Clear",
+                        _ => "Frost",
+                    };
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                2 => {
+                    s.blur_level = (s.blur_level + 1) % BLUR_LEVEL_NAMES.len();
+                    s.base_blur_cache.borrow_mut().clear();
+                    s.dock_frost_cache.borrow_mut().take();
+                }
+                3 => {
+                    s.icon_pack = if s.icon_pack == "CleanFrame default" { "Full Color" } else { "CleanFrame default" };
+                }
+                _ => {}
+            }
+        }
+        "wallpaper_type" => {
+            if s.selected_detail_option == 0 {
+                s.current_group = "background";
+                s.selected_detail_option = s.wallpaper_idx as i32;
+                s.detail_back_text = "‹ Wallpaper & Typography";
+            } else {
+                s.typography = match s.typography {
+                    "Manrope" => "Newsreader",
+                    "Newsreader" => "Geist",
+                    _ => "Manrope",
+                };
+            }
+        }
+        "visual_effects" => {
+            match s.selected_detail_option {
+                0 => {
+                    s.dark_mode = !s.dark_mode;
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                1 => s.physics = !s.physics,
+                2 => s.liquid_merge = !s.liquid_merge,
+                3 => s.increase_contrast = !s.increase_contrast,
+                4 => s.reduce_motion = !s.reduce_motion,
+                5 => {
+                    s.reduce_transparency = !s.reduce_transparency;
+                    s.dock_frost_cache.borrow_mut().take();
+                    s.focus_lens_cache.borrow_mut().take();
+                }
+                _ => {}
+            }
+        }
+        "system_inputs" => {
+            if s.selected_detail_option == 0 {
+                s.current_group = "inputs";
+                s.selected_detail_option = 0;
+                s.detail_back_text = "‹ System & Inputs";
+            } else if s.selected_detail_option == 1 {
+                s.all_apps_open = true;
+                s.selected_all_app = 0;
+                s.settings_open = false;
+            } else {
+                s.current_group = "samsung";
+                s.selected_detail_option = 0;
+                s.detail_back_text = "‹ System & Inputs";
+            }
+        }
         "background" => {
             if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < WALLPAPERS.len() {
                 s.wallpaper_idx = s.selected_detail_option as usize;
+                s.dock_frost_cache.borrow_mut().take();
             }
-        }
-        "layout" => {
-            s.layout_mode = if s.selected_detail_option == 0 { "List" } else { "Dock" };
-        }
-        "blur" => {
-            if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < BLUR_LEVEL_NAMES.len() {
-                s.blur_level = s.selected_detail_option as usize;
-                s.frost_cache.borrow_mut().clear();
-            }
-        }
-        "typography" => {
-            s.typography = match s.selected_detail_option {
-                0 => "Manrope",
-                1 => "Newsreader",
-                _ => "Geist",
-            };
-        }
-        "icons" => {
-            s.icon_pack = if s.selected_detail_option == 0 { "CleanFrame default" } else { "Full Color" };
-        }
-        "focus" => {
-            s.focus_style = match s.selected_detail_option {
-                1 => "Round",
-                2 => "Minimal Type",
-                _ => "Glass Plate",
-            };
-        }
-        "material" => {
-            s.material = match s.selected_detail_option {
-                0 => "Frost",
-                1 => "Soft",
-                2 => "Obsidian Tint",
-                _ => "Clear",
-            };
-            s.focus_lens_cache.borrow_mut().take();
         }
         "inputs" => {
             if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < HDMI_IDS.len() {
@@ -1749,9 +1834,6 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
             } else {
                 launch_home(app);
             }
-        }
-        "editor" => {
-            launch_package(app, "com.aurora.store");
         }
         _ => {}
     }
@@ -1838,74 +1920,202 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     };
     win.set_focused_caption(caption_text.into());
 
-    // Update settings overview readout values (13 rows)
+    // Update settings overview readout values (4 rows)
     let settings = win.get_settings_list();
     if let Some(mut r) = settings.row_data(0) {
-        r.value = format!("{} · Pure Glass", s.appearance_preset).into();
+        r.value = format!("Focus: {} · Dock: {}", s.focus_style, s.layout_mode).into();
         settings.set_row_data(0, r);
     }
     if let Some(mut r) = settings.row_data(1) {
-        r.value = format!("{:.2} · Snell Bevel", s.refraction).into();
+        let wp_name = if s.wallpaper_idx < WALLPAPERS.len() { WALLPAPERS[s.wallpaper_idx].name } else { "Photo" };
+        r.value = format!("{} · {}", wp_name, s.typography).into();
         settings.set_row_data(1, r);
     }
     if let Some(mut r) = settings.row_data(2) {
-        r.value = format!("{:.2} · {}", s.transparency, if s.transparency == 0.0 { "Clear" } else { "Tinted" }).into();
+        let mut v = Vec::new();
+        if s.dark_mode { v.push("Dark"); }
+        if s.physics { v.push("Physics"); }
+        if s.liquid_merge { v.push("Liquid"); }
+        let desc = if v.is_empty() { "Standard".to_string() } else { v.join(" · ") };
+        r.value = desc.into();
         settings.set_row_data(2, r);
     }
     if let Some(mut r) = settings.row_data(3) {
-        let mut v = Vec::new();
-        if s.physics { v.push("Physics"); }
-        if s.liquid_merge { v.push("Liquid"); }
-        if s.dark_mode { v.push("Dark"); }
-        let desc = if v.is_empty() { "Standard".to_string() } else { v.join(" · ") };
-        r.value = desc.into();
+        r.value = "HDMI · Apps · System".into();
         settings.set_row_data(3, r);
     }
-    if let Some(mut r) = settings.row_data(4) {
-        if s.wallpaper_idx < WALLPAPERS.len() {
-            r.value = WALLPAPERS[s.wallpaper_idx].name.into();
-        }
-        settings.set_row_data(4, r);
-    }
-    if let Some(mut r) = settings.row_data(5) {
-        r.value = s.layout_mode.into();
-        settings.set_row_data(5, r);
-    }
-    if let Some(mut r) = settings.row_data(6) {
-        r.value = BLUR_LEVEL_NAMES[s.blur_level.min(BLUR_LEVEL_NAMES.len() - 1)].into();
-        settings.set_row_data(6, r);
-    }
-    if let Some(mut r) = settings.row_data(7) {
-        r.value = s.focus_style.into();
-        settings.set_row_data(7, r);
-    }
-    if let Some(mut r) = settings.row_data(8) {
-        r.value = s.typography.into();
-        settings.set_row_data(8, r);
-    }
-    if let Some(mut r) = settings.row_data(9) {
-        r.value = s.icon_pack.into();
-        settings.set_row_data(9, r);
-    }
-    if let Some(mut r) = settings.row_data(10) {
-        r.value = "Device dependent".into();
-        settings.set_row_data(10, r);
-    }
-    if let Some(mut r) = settings.row_data(11) {
-        r.value = "8 apps".into();
-        settings.set_row_data(11, r);
-    }
-    if let Some(mut r) = settings.row_data(12) {
-        r.value = "Home and TV settings".into();
-        settings.set_row_data(12, r);
-    }
+
+    win.set_detail_back_text(s.detail_back_text.into());
 
     // Update Detail Submenu Options
     if s.settings_detail {
         match s.current_group {
+            "dock_nav" => {
+                win.set_detail_title("Dock & Navigation".into());
+                win.set_detail_desc("Configure liquid focus lens optics, Snell refraction depth, and dock layout.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "nav_focus_item".into(),
+                    title: "Focus Item Settings".into(),
+                    desc: format!("Style: {} · Refraction: {:.2} · {}", s.focus_style, s.refraction, s.appearance_preset).into(),
+                    active: true,
+                });
+                list.push(DetailOption {
+                    id: "nav_dock_settings".into(),
+                    title: "Dock Settings".into(),
+                    desc: format!("Layout: {} · Material: {} · {}", s.layout_mode, s.material, s.icon_pack).into(),
+                    active: false,
+                });
+                win.set_detail_options(list.into());
+            }
+            "focus_item" => {
+                win.set_detail_title("Focus Item Settings".into());
+                win.set_detail_desc("Adjust focus lens shape, Snell optical refraction, and crystal clear material.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "focus_style".into(),
+                    title: format!("Focus Style: {}", s.focus_style).into(),
+                    desc: "Round 360° lens orb · Glass Plate · Minimal Type (OK to cycle)".into(),
+                    active: true,
+                });
+                list.push(DetailOption {
+                    id: "refraction".into(),
+                    title: format!("Snell Refraction: {:.2}", s.refraction).into(),
+                    desc: format!("Snell Bevel (η = 1.50, depth {:.1}pt) · Left / Right adjust", 12.0 + 40.0 * s.refraction).into(),
+                    active: s.refraction > 0.0,
+                });
+                list.push(DetailOption {
+                    id: "appearance".into(),
+                    title: format!("Appearance: {} Glass", s.appearance_preset).into(),
+                    desc: "Clear (crystal sheer) · Regular Frost · Tinted (OK to cycle)".into(),
+                    active: s.appearance_preset == "Clear",
+                });
+                list.push(DetailOption {
+                    id: "transparency".into(),
+                    title: format!("Transparency: {:.2}", s.transparency).into(),
+                    desc: "Optical transmission substrate level · Left / Right adjust".into(),
+                    active: s.transparency > 0.0,
+                });
+                win.set_detail_options(list.into());
+            }
+            "dock_settings" => {
+                win.set_detail_title("Dock Settings".into());
+                win.set_detail_desc("Configure launcher dock geometry, frosted diffusion, and icon aesthetic.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "layout".into(),
+                    title: format!("Layout Mode: {}", s.layout_mode).into(),
+                    desc: "Horizontal liquid glass dock vs vertical column (OK to toggle)".into(),
+                    active: s.layout_mode == "Dock",
+                });
+                list.push(DetailOption {
+                    id: "material".into(),
+                    title: format!("Dock Material: {}", s.material).into(),
+                    desc: "Frost · Soft · Obsidian Tint · Clear (OK to cycle)".into(),
+                    active: s.material == "Clear" || s.material == "Frost",
+                });
+                list.push(DetailOption {
+                    id: "blur".into(),
+                    title: format!("Optical Blur: {}", BLUR_LEVEL_NAMES[s.blur_level.min(BLUR_LEVEL_NAMES.len() - 1)]).into(),
+                    desc: "Subtle frost · Deep blur · Glass blur · Off (OK to cycle)".into(),
+                    active: s.blur_level > 0,
+                });
+                list.push(DetailOption {
+                    id: "icons".into(),
+                    title: format!("Icon Pack: {}", s.icon_pack).into(),
+                    desc: "CleanFrame default vs Full Color brand artwork (OK to toggle)".into(),
+                    active: s.icon_pack == "CleanFrame default",
+                });
+                win.set_detail_options(list.into());
+            }
+            "wallpaper_type" => {
+                win.set_detail_title("Wallpaper & Typography".into());
+                win.set_detail_desc("Select curated photographic landscapes or fine system typography.".into());
+                let list = Rc::new(VecModel::default());
+                let wp_name = if s.wallpaper_idx < WALLPAPERS.len() { WALLPAPERS[s.wallpaper_idx].name } else { "Photo" };
+                list.push(DetailOption {
+                    id: "nav_bg".into(),
+                    title: format!("Background Wallpaper: {}", wp_name).into(),
+                    desc: "15 curated photographic landscapes and fine art galleries (OK to open)".into(),
+                    active: true,
+                });
+                list.push(DetailOption {
+                    id: "nav_font".into(),
+                    title: format!("Typography: {}", s.typography).into(),
+                    desc: "Manrope sans-serif · Newsreader serif · Geist grotesque (OK to cycle)".into(),
+                    active: false,
+                });
+                win.set_detail_options(list.into());
+            }
+            "visual_effects" => {
+                win.set_detail_title("Visual Effects & Accessibility".into());
+                win.set_detail_desc("Configure liquid glass fluid simulations, dark mode, and accessibility.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "dark".into(),
+                    title: "Dark Mode".into(),
+                    desc: "Deep obsidian glass styling for dim viewing rooms".into(),
+                    active: s.dark_mode,
+                });
+                list.push(DetailOption {
+                    id: "physics".into(),
+                    title: "Snell Physics & Springs".into(),
+                    desc: "Fluid spring dynamics and squash/stretch lens momentum".into(),
+                    active: s.physics,
+                });
+                list.push(DetailOption {
+                    id: "liquid_merge".into(),
+                    title: "Liquid Glass Merge".into(),
+                    desc: "Viscous fluid metaball fusion between adjacent lenses".into(),
+                    active: s.liquid_merge,
+                });
+                list.push(DetailOption {
+                    id: "contrast".into(),
+                    title: "Increase Contrast".into(),
+                    desc: "High-contrast text labels and luminous rim highlights".into(),
+                    active: s.increase_contrast,
+                });
+                list.push(DetailOption {
+                    id: "motion".into(),
+                    title: "Reduce Motion".into(),
+                    desc: "Disable fluid bounce and morphing animations".into(),
+                    active: s.reduce_motion,
+                });
+                list.push(DetailOption {
+                    id: "transparency_opt".into(),
+                    title: "Reduce Transparency".into(),
+                    desc: "Solid matte plates with high legibility".into(),
+                    active: s.reduce_transparency,
+                });
+                win.set_detail_options(list.into());
+            }
+            "system_inputs" => {
+                win.set_detail_title("System & Inputs".into());
+                win.set_detail_desc("External TV HDMI source passthrough, app manager, and system settings.".into());
+                let list = Rc::new(VecModel::default());
+                list.push(DetailOption {
+                    id: "nav_inputs".into(),
+                    title: "TV Inputs & HDMI".into(),
+                    desc: "Switch active source between HDMI 1, 2, 3, and AV passthrough".into(),
+                    active: true,
+                });
+                list.push(DetailOption {
+                    id: "nav_apps".into(),
+                    title: "Installed Applications".into(),
+                    desc: "Open All Apps Studio & Aurora Application Store".into(),
+                    active: false,
+                });
+                list.push(DetailOption {
+                    id: "nav_tv".into(),
+                    title: "Android TV & System Settings".into(),
+                    desc: "Display, sound, network, and default launcher settings".into(),
+                    active: false,
+                });
+                win.set_detail_options(list.into());
+            }
             "background" => {
-                win.set_detail_title("Background".into());
-                win.set_detail_desc("Choose a photographic landscape or gallery wallpaper.".into());
+                win.set_detail_title("Background Wallpaper".into());
+                win.set_detail_desc("Choose a photographic landscape or gallery artwork.".into());
                 let list = Rc::new(VecModel::default());
                 for (idx, w) in WALLPAPERS.iter().enumerate() {
                     list.push(DetailOption {
@@ -1917,136 +2127,8 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                 }
                 win.set_detail_options(list.into());
             }
-            "layout" => {
-                win.set_detail_title("Layout".into());
-                win.set_detail_desc("Choose between vertical list and horizontal liquid glass dock.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "list".into(),
-                    title: "List".into(),
-                    desc: "Vertical typography column with quick right-side inputs & utilities".into(),
-                    active: s.layout_mode == "List",
-                });
-                list.push(DetailOption {
-                    id: "dock".into(),
-                    title: "Dock".into(),
-                    desc: "Horizontal liquid glass dock centered at the bottom of the screen".into(),
-                    active: s.layout_mode == "Dock",
-                });
-                win.set_detail_options(list.into());
-            }
-            "blur" => {
-                win.set_detail_title("Optical Blur".into());
-                win.set_detail_desc("Configure background diffusion radius or turn off for crystal-clear substrate.".into());
-                let list = Rc::new(VecModel::default());
-                for (idx, &name) in BLUR_LEVEL_NAMES.iter().enumerate() {
-                    list.push(DetailOption {
-                        id: name.to_lowercase().into(),
-                        title: name.into(),
-                        desc: BLUR_LEVEL_DESCS[idx].into(),
-                        active: s.blur_level == idx,
-                    });
-                }
-                win.set_detail_options(list.into());
-            }
-            "typography" => {
-                win.set_detail_title("Typography".into());
-                win.set_detail_desc("Select typography styling for titles, clocks and labels.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "manrope".into(),
-                    title: "Manrope".into(),
-                    desc: "Clean geometric modern sans-serif".into(),
-                    active: s.typography == "Manrope",
-                });
-                list.push(DetailOption {
-                    id: "newsreader".into(),
-                    title: "Newsreader".into(),
-                    desc: "Editorial optical-size serif typeface".into(),
-                    active: s.typography == "Newsreader",
-                });
-                list.push(DetailOption {
-                    id: "geist".into(),
-                    title: "Geist".into(),
-                    desc: "Precise modernist architectural grotesque".into(),
-                    active: s.typography == "Geist",
-                });
-                win.set_detail_options(list.into());
-            }
-            "icons" => {
-                win.set_detail_title("Icon Pack".into());
-                win.set_detail_desc("Choose icon rendering aesthetics for app shortcuts.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "mono".into(),
-                    title: "CleanFrame default".into(),
-                    desc: "Minimal white brand vector silhouettes with frosted glass contrast".into(),
-                    active: s.icon_pack == "CleanFrame default",
-                });
-                list.push(DetailOption {
-                    id: "color".into(),
-                    title: "Full Color".into(),
-                    desc: "Original brand colors on glass plates".into(),
-                    active: s.icon_pack == "Full Color",
-                });
-                win.set_detail_options(list.into());
-            }
-            "focus" => {
-                win.set_detail_title("Focus Style".into());
-                win.set_detail_desc("Configure how the active selection is highlighted on Home.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "glass_plate".into(),
-                    title: "Glass Plate".into(),
-                    desc: "Luminous floating liquid glass plate with specular rim behind focused item".into(),
-                    active: s.focus_style == "Glass Plate",
-                });
-                list.push(DetailOption {
-                    id: "round".into(),
-                    title: "Round".into(),
-                    desc: "Circular liquid glass lens orb with 360° radial Snell refraction and dome specular glint".into(),
-                    active: s.focus_style == "Round",
-                });
-                list.push(DetailOption {
-                    id: "minimal_type".into(),
-                    title: "Minimal Type".into(),
-                    desc: "Pure borderless typography: removes box plate; enlarges active icon & text".into(),
-                    active: s.focus_style == "Minimal Type",
-                });
-                win.set_detail_options(list.into());
-            }
-            "material" => {
-                win.set_detail_title("Glass Material".into());
-                win.set_detail_desc("Select glass translucency and color tint for dock and floating panels.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "frost".into(),
-                    title: "Frost".into(),
-                    desc: "Apple-style luminous frosty glass with bright specular rim and clean diffusion".into(),
-                    active: s.material == "Frost",
-                });
-                list.push(DetailOption {
-                    id: "soft".into(),
-                    title: "Soft".into(),
-                    desc: "Balanced neutral translucency with gentle warm ambient shading".into(),
-                    active: s.material == "Soft",
-                });
-                list.push(DetailOption {
-                    id: "obsidian".into(),
-                    title: "Obsidian Tint".into(),
-                    desc: "Deep dark smoky obsidian glass for cinematic contrast and dark mode".into(),
-                    active: s.material == "Obsidian Tint",
-                });
-                list.push(DetailOption {
-                    id: "clear".into(),
-                    title: "Clear".into(),
-                    desc: "Ultra-sheer transparent glass substrate showcasing pure wallpaper colors".into(),
-                    active: s.material == "Clear",
-                });
-                win.set_detail_options(list.into());
-            }
             "inputs" => {
-                win.set_detail_title("TV inputs".into());
+                win.set_detail_title("TV Inputs".into());
                 win.set_detail_desc("Choose a connected HDMI port to switch passthrough source.".into());
                 let list = Rc::new(VecModel::default());
                 list.push(DetailOption {
@@ -2090,18 +2172,6 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                     title: "Original TV Home".into(),
                     desc: "Return to default TV system launcher".into(),
                     active: false,
-                });
-                win.set_detail_options(list.into());
-            }
-            "editor" => {
-                win.set_detail_title("Apps on Home".into());
-                win.set_detail_desc("Manage installed TV applications and app store.".into());
-                let list = Rc::new(VecModel::default());
-                list.push(DetailOption {
-                    id: "app_store".into(),
-                    title: "Open App Store / Aurora".into(),
-                    desc: "Discover, install and update Android TV apps".into(),
-                    active: true,
                 });
                 win.set_detail_options(list.into());
             }

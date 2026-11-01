@@ -308,6 +308,7 @@ export component MainWindow inherits Window {
     in property <bool> settings_detail: false;
     in property <string> detail_title: "Background";
     in property <string> detail_desc: "Choose a photographic background or solid color.";
+    in property <string> detail_back_text: "‹ Settings";
     in property <int> selected_setting: 0;
     in property <int> selected_detail_option: 0;
 
@@ -333,21 +334,12 @@ export component MainWindow inherits Window {
     in-out property <bool> in_appearance_panel: false;
     in-out property <int> appearance_focus_index: 3;
 
-    // 13 Settings Overview Items (With Optical Blur & Liquid Glass Refraction)
+    // 4 Primary Nested Settings Categories
     in property <[SettingItem]> settings_list: [
-        { id: "appearance", label: "Appearance", value: "Clear · Pure Glass" },
-        { id: "refraction", label: "Glass refraction", value: "1.00 · Snell Bevel" },
-        { id: "transparency", label: "Transparency", value: "0.00 · Clear" },
-        { id: "chips", label: "Visual effects", value: "Physics · Liquid" },
-        { id: "background", label: "Background", value: "Mountain valley" },
-        { id: "layout", label: "Layout", value: "Dock" },
-        { id: "blur", label: "Optical blur", value: "Subtle frost" },
-        { id: "focus", label: "Focus style", value: "Glass Plate" },
-        { id: "typography", label: "Typography", value: "Manrope" },
-        { id: "icons", label: "Icon pack", value: "CleanFrame default" },
-        { id: "inputs", label: "TV inputs", value: "Device dependent" },
-        { id: "editor", label: "Apps on Home", value: "8 apps" },
-        { id: "samsung", label: "Samsung & TV", value: "Home and TV settings" }
+        { id: "dock_nav", label: "Dock & Navigation", value: "Focus Item · Dock Settings" },
+        { id: "wallpaper_type", label: "Wallpaper & Typography", value: "15 Landscapes · 3 Fonts" },
+        { id: "visual_effects", label: "Visual Effects & Accessibility", value: "Dark Mode · Physics · Liquid" },
+        { id: "system_inputs", label: "System & Inputs", value: "HDMI Sources · Apps · TV Settings" }
     ];
 
     in property <[DetailOption]> detail_options: [];
@@ -1229,8 +1221,8 @@ export component MainWindow inherits Window {
                         x: root.setting_squash_w * 0.5;
                         y: root.anim_setting_y - root.setting_stretch_h * 0.5;
                         width: parent.width - root.setting_squash_w;
-                        height: 38px + root.setting_stretch_h;
-                        border-radius: 10px;
+                        height: 58px + root.setting_stretch_h;
+                        border-radius: 14px;
                         clip: true;
 
                         // 1. Co-located Optical Refracted Wallpaper
@@ -1247,7 +1239,7 @@ export component MainWindow inherits Window {
                         Rectangle {
                             width: 100%;
                             height: 100%;
-                            background: root.in_appearance_panel ? rgba(255, 255, 255, 0.05) : rgba(255, 255, 255, 0.14);
+                            background: rgba(255, 255, 255, 0.12);
                         }
 
                         // 3. Convex Top Specular Sheen
@@ -1256,8 +1248,8 @@ export component MainWindow inherits Window {
                             y: 1px;
                             width: parent.width - 8px;
                             height: parent.height * 0.45;
-                            border-radius: 8px;
-                            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.0) 100%);
+                            border-radius: 12px;
+                            background: @linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.0) 100%);
                         }
 
                         // 4. Specular Hairline Glint (zero stroke border)
@@ -1273,45 +1265,45 @@ export component MainWindow inherits Window {
 
                     for s[s_idx] in root.settings_list: Rectangle {
                         x: 0px;
-                        y: s_idx * 41px - clamp((root.selected_setting - 7) * 41px, 0px, 205px);
+                        y: s_idx * 66px;
                         width: parent.width;
-                        height: 38px;
-                        border-radius: 10px;
+                        height: 58px;
+                        border-radius: 14px;
 
                         animate y { duration: 240ms; easing: cubic-bezier(0.25, 1.25, 0.5, 1.0); }
 
                         // Label & Value
                         Text {
-                            x: 14px;
-                            y: 4px;
-                            height: 16px;
+                            x: 16px;
+                            y: 10px;
+                            height: 18px;
                             vertical-alignment: center;
                             text: s.label;
-                            font-size: 13px;
+                            font-size: 14px;
                             font-weight: 600;
                             color: #ffffff;
                         }
 
                         Text {
-                            x: 14px;
-                            y: 20px;
-                            height: 14px;
+                            x: 16px;
+                            y: 30px;
+                            height: 16px;
                             vertical-alignment: center;
                             text: s.value;
-                            font-size: 10px;
+                            font-size: 11px;
                             font-weight: 400;
                             color: (root.selected_setting == s_idx) ? rgba(255, 255, 255, 0.95) : rgba(246, 241, 231, 0.70);
                         }
 
                         Text {
-                            x: parent.width - 24px;
+                            x: parent.width - 28px;
                             y: 0px;
                             width: 16px;
                             height: parent.height;
                             vertical-alignment: center;
                             horizontal-alignment: center;
                             text: "›";
-                            font-size: 16px;
+                            font-size: 18px;
                             font-weight: 600;
                             color: (root.selected_setting == s_idx) ? #ffffff : rgba(246, 241, 231, 0.40);
                         }
@@ -1365,7 +1357,7 @@ export component MainWindow inherits Window {
                 Rectangle {
                     x: 20px;
                     y: 16px;
-                    width: 96px;
+                    width: 170px;
                     height: 26px;
                     border-radius: 13px;
                     clip: true;
@@ -1400,13 +1392,13 @@ export component MainWindow inherits Window {
                     }
 
                     Text {
-                        x: 0px;
+                        x: 8px;
                         y: 0px;
-                        width: parent.width;
+                        width: parent.width - 16px;
                         height: parent.height;
                         horizontal-alignment: center;
                         vertical-alignment: center;
-                        text: "‹ Settings";
+                        text: root.detail_back_text;
                         font-size: 11px;
                         font-weight: 600;
                         color: #ffffff;
@@ -1500,7 +1492,7 @@ export component MainWindow inherits Window {
                         animate y { duration: 240ms; easing: cubic-bezier(0.25, 1.25, 0.5, 1.0); }
 
                         // Radio indicator dot
-                        Rectangle {
+                        if (opt.id != "refraction" && opt.id != "transparency" && opt.id != "nav_focus_item" && opt.id != "nav_dock_settings" && opt.id != "nav_bg" && opt.id != "nav_font" && opt.id != "nav_inputs" && opt.id != "nav_apps" && opt.id != "nav_tv"): Rectangle {
                             x: 12px;
                             y: (parent.height - 10px) / 2;
                             width: 10px;
@@ -1509,9 +1501,19 @@ export component MainWindow inherits Window {
                             background: opt.active ? #34C759 : rgba(255, 255, 255, 0.25);
                         }
 
+                        // Slider dot
+                        if (opt.id == "refraction" || opt.id == "transparency"): Rectangle {
+                            x: 12px;
+                            y: (parent.height - 10px) / 2;
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: (opt.id == "refraction") ? #0088FF : #34C759;
+                        }
+
                         // Option Title & Description
                         Text {
-                            x: 30px;
+                            x: (opt.id == "nav_focus_item" || opt.id == "nav_dock_settings" || opt.id == "nav_bg" || opt.id == "nav_font" || opt.id == "nav_inputs" || opt.id == "nav_apps" || opt.id == "nav_tv") ? 16px : 30px;
                             y: 3px;
                             height: 16px;
                             vertical-alignment: center;
@@ -1522,7 +1524,7 @@ export component MainWindow inherits Window {
                         }
 
                         Text {
-                            x: 30px;
+                            x: (opt.id == "nav_focus_item" || opt.id == "nav_dock_settings" || opt.id == "nav_bg" || opt.id == "nav_font" || opt.id == "nav_inputs" || opt.id == "nav_apps" || opt.id == "nav_tv") ? 16px : 30px;
                             y: 19px;
                             height: 16px;
                             vertical-alignment: center;
@@ -1530,6 +1532,57 @@ export component MainWindow inherits Window {
                             font-size: 10px;
                             font-weight: 400;
                             color: (root.selected_detail_option == o_idx) ? rgba(255, 255, 255, 0.95) : rgba(246, 241, 231, 0.70);
+                        }
+
+                        // Chevron for navigation items
+                        if (opt.id == "nav_focus_item" || opt.id == "nav_dock_settings" || opt.id == "nav_bg" || opt.id == "nav_font" || opt.id == "nav_inputs" || opt.id == "nav_apps" || opt.id == "nav_tv"): Text {
+                            x: parent.width - 24px;
+                            y: 0px;
+                            width: 16px;
+                            height: parent.height;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            text: "›";
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: (root.selected_detail_option == o_idx) ? #ffffff : rgba(246, 241, 231, 0.40);
+                        }
+
+                        // Trailing mini-slider track for refraction / transparency sliders
+                        if (opt.id == "refraction"): Rectangle {
+                            x: parent.width - 70px;
+                            y: (parent.height - 6px) / 2;
+                            width: 56px;
+                            height: 6px;
+                            border-radius: 3px;
+                            background: rgba(255, 255, 255, 0.20);
+
+                            Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: clamp(parent.width * root.refraction_value, 4px, parent.width);
+                                height: 100%;
+                                border-radius: 3px;
+                                background: #0088FF;
+                            }
+                        }
+
+                        if (opt.id == "transparency"): Rectangle {
+                            x: parent.width - 70px;
+                            y: (parent.height - 6px) / 2;
+                            width: 56px;
+                            height: 6px;
+                            border-radius: 3px;
+                            background: rgba(255, 255, 255, 0.20);
+
+                            Rectangle {
+                                x: 0px;
+                                y: 0px;
+                                width: clamp(parent.width * root.transparency_value, 4px, parent.width);
+                                height: 100%;
+                                border-radius: 3px;
+                                background: #34C759;
+                            }
                         }
                     }
                 }
@@ -1564,7 +1617,7 @@ export component MainWindow inherits Window {
                     Text {
                         x: 36px;
                         y: 4px;
-                        text: "Apply choice · Back return";
+                        text: "OK Select / Toggle  ·  Left / Right Adjust  ·  Back Return";
                         font-size: 11px;
                         font-weight: 500;
                         color: rgba(246, 241, 231, 0.65);
@@ -1573,7 +1626,7 @@ export component MainWindow inherits Window {
             }
         }
 
-        // RIGHT COLUMN: APPLE LIQUID GLASS APPEARANCE & OPTICS STUDIO (al1h3n/liquid-rust)
+        // RIGHT COLUMN: LIVE INTERACTIVE DASHBOARD PREVIEW
         Rectangle {
             x: 462px;
             y: 28px;
@@ -1597,11 +1650,7 @@ export component MainWindow inherits Window {
                     (root.current_material == "Clear") ?
                     @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.01) 25%, rgba(12, 16, 22, 0.25) 100%) :
                     @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 25%, rgba(18, 22, 28, 0.45) 65%, rgba(10, 14, 18, 0.62) 100%);
-                rim_color: (root.current_material == "Tinted") ? rgba(80, 180, 255, 0.65) :
-                           (root.current_material == "Obsidian Tint") ? rgba(255, 255, 255, 0.22) :
-                           (root.current_material == "Frost") ? rgba(255, 255, 255, 0.55) :
-                           (root.current_material == "Clear") ? rgba(255, 255, 255, 0.22) :
-                           rgba(255, 255, 255, 0.34);
+                rim_color: rgba(255, 255, 255, 0.34);
                 rim_width: 1.25px;
                 show_specular_hairline: true;
                 show_left_rim: false;
@@ -1616,7 +1665,7 @@ export component MainWindow inherits Window {
                 Text {
                     x: 20px;
                     y: 18px;
-                    text: "Appearance";
+                    text: "Live Preview";
                     font-size: 20px;
                     font-weight: 700;
                     color: #ffffff;
@@ -1624,549 +1673,335 @@ export component MainWindow inherits Window {
                 Text {
                     x: 20px;
                     y: 44px;
-                    text: "Applies to every piece of glass on the page.";
-                    font-size: 12.5px;
+                    text: "Real-time Home Screen & Optical Glass Simulation";
+                    font-size: 12px;
                     font-weight: 400;
                     color: rgba(255, 255, 255, 0.65);
                 }
 
-                // 2. Material Presets (Segmented Capsule Selector)
+                // 2. Miniature Home Screen Preview Stage (16:9 Aspect Ratio)
                 Rectangle {
                     x: 20px;
-                    y: 70px;
-                    width: parent.width - 40px;
-                    height: 36px;
-                    border-radius: 18px;
-                    background: rgba(0, 0, 0, 0.22);
-                    border-width: 0.75px;
-                    border-color: rgba(255, 255, 255, 0.14);
-
-                    // Clear glass (Index 0)
-                    Rectangle {
-                        x: 2px;
-                        y: 2px;
-                        width: (parent.width - 8px) / 3;
-                        height: 32px;
-                        border-radius: 16px;
-                        background: (root.appearance_preset == "Clear") ? #0088FF : transparent;
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 0) ? 2px : 0px;
-                        border-color: #ffffff;
-
-                        if (root.appearance_preset == "Clear"): Rectangle {
-                            x: 6px;
-                            y: 1px;
-                            width: parent.width - 12px;
-                            height: 1px;
-                            background: rgba(255, 255, 255, 0.60);
-                        }
-
-                        Text {
-                            width: 100%;
-                            height: 100%;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            text: "Clear glass";
-                            font-size: 12px;
-                            font-weight: (root.appearance_preset == "Clear") ? 600 : 500;
-                            color: #ffffff;
-                        }
-                        TouchArea { clicked => { root.set_appearance_preset("Clear"); } }
-                    }
-
-                    // Regular glass (Index 1)
-                    Rectangle {
-                        x: 2px + (parent.width - 8px) / 3 + 2px;
-                        y: 2px;
-                        width: (parent.width - 8px) / 3;
-                        height: 32px;
-                        border-radius: 16px;
-                        background: (root.appearance_preset == "Regular") ? #0088FF : transparent;
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 1) ? 2px : 0px;
-                        border-color: #ffffff;
-
-                        if (root.appearance_preset == "Regular"): Rectangle {
-                            x: 6px;
-                            y: 1px;
-                            width: parent.width - 12px;
-                            height: 1px;
-                            background: rgba(255, 255, 255, 0.60);
-                        }
-
-                        Text {
-                            width: 100%;
-                            height: 100%;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            text: "Regular glass";
-                            font-size: 12px;
-                            font-weight: (root.appearance_preset == "Regular") ? 600 : 500;
-                            color: #ffffff;
-                        }
-                        TouchArea { clicked => { root.set_appearance_preset("Regular"); } }
-                    }
-
-                    // Tinted glass (Index 2)
-                    Rectangle {
-                        x: 2px + 2 * ((parent.width - 8px) / 3 + 2px);
-                        y: 2px;
-                        width: (parent.width - 8px) / 3;
-                        height: 32px;
-                        border-radius: 16px;
-                        background: (root.appearance_preset == "Tinted") ? #0088FF : transparent;
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 2) ? 2px : 0px;
-                        border-color: #ffffff;
-
-                        if (root.appearance_preset == "Tinted"): Rectangle {
-                            x: 6px;
-                            y: 1px;
-                            width: parent.width - 12px;
-                            height: 1px;
-                            background: rgba(255, 255, 255, 0.60);
-                        }
-
-                        Text {
-                            width: 100%;
-                            height: 100%;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            text: "Tinted glass";
-                            font-size: 12px;
-                            font-weight: (root.appearance_preset == "Tinted") ? 600 : 500;
-                            color: #ffffff;
-                        }
-                        TouchArea { clicked => { root.set_appearance_preset("Tinted"); } }
-                    }
-                }
-
-                // 3. Refraction Slider Control (Index 3) - liquid-rust exact optics layout
-                Rectangle {
-                    x: 20px;
-                    y: 118px;
-                    width: parent.width - 40px;
-                    height: 60px;
-
-                    Text {
-                        x: 0px;
-                        y: 0px;
-                        text: "Refraction " + root.refraction_display;
-                        font-size: 13.5px;
-                        font-weight: 600;
-                        color: #ffffff;
-                    }
-                    Text {
-                        x: 0px;
-                        y: 16px;
-                        text: root.refraction_subcaption;
-                        font-size: 10.5px;
-                        font-weight: 400;
-                        color: rgba(255, 255, 255, 0.60);
-                    }
-
-                    // Refraction Track
-                    Rectangle {
-                        x: 0px;
-                        y: 34px;
-                        width: parent.width;
-                        height: 22px;
-                        border-radius: 11px;
-                        background: #2A2B2F;
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 3) ? 2px : 0.75px;
-                        border-color: (root.in_appearance_panel && root.appearance_focus_index == 3) ? #ffffff : rgba(255, 255, 255, 0.15);
-                        clip: true;
-
-                        // Blue Fill from left to knob
-                        Rectangle {
-                            x: 0px;
-                            y: 0px;
-                            width: clamp(root.refraction_value * parent.width, 0px, parent.width);
-                            height: 100%;
-                            background: #0088FF;
-                        }
-
-                        TouchArea {
-                            moved => {
-                                if (self.pressed) {
-                                    root.set_refraction(clamp(self.mouse-x / parent.width, 0.0, 1.0));
-                                }
-                            }
-                            clicked => {
-                                root.set_refraction(clamp(self.mouse-x / parent.width, 0.0, 1.0));
-                            }
-                        }
-                    }
-
-                    // Floating Liquid Glass Capsule Lens Knob
-                    Rectangle {
-                        x: clamp(root.refraction_value * (parent.width - 74px), 0px, parent.width - 74px);
-                        y: 31px;
-                        width: 74px;
-                        height: 28px;
-                        border-radius: 14px;
-                        background: @linear-gradient(155deg, rgba(255, 255, 255, 0.40) 0%, rgba(255, 255, 255, 0.14) 35%, rgba(0, 136, 255, 0.25) 100%);
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 3) ? 2px : 0.75px;
-                        border-color: (root.in_appearance_panel && root.appearance_focus_index == 3) ? #ffffff : rgba(255, 255, 255, 0.40);
-                        clip: true;
-
-                        // Top Specular Hairline Glint
-                        Rectangle {
-                            x: 6px;
-                            y: 1px;
-                            width: parent.width - 12px;
-                            height: 1px;
-                            background: rgba(255, 255, 255, 0.85);
-                        }
-
-                        Text {
-                            width: 100%;
-                            height: 100%;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            text: root.refraction_display;
-                            font-size: 11px;
-                            font-weight: 700;
-                            color: #ffffff;
-                        }
-                    }
-                }
-
-                // 4. iOS 27 Transparency Slider (Index 4) - liquid-rust exact 6px track
-                Rectangle {
-                    x: 20px;
-                    y: 194px;
-                    width: parent.width - 40px;
-                    height: 52px;
-
-                    Text {
-                        x: 0px;
-                        y: 0px;
-                        text: "Clear";
-                        font-size: 12px;
-                        font-weight: 500;
-                        color: rgba(255, 255, 255, 0.65);
-                    }
-                    Text {
-                        x: 0px;
-                        y: 0px;
-                        width: parent.width;
-                        horizontal-alignment: center;
-                        text: "Transparency (" + root.transparency_display + ")";
-                        font-size: 12px;
-                        font-weight: 600;
-                        color: #ffffff;
-                    }
-                    Text {
-                        x: parent.width - 50px;
-                        y: 0px;
-                        width: 50px;
-                        horizontal-alignment: right;
-                        text: "Tinted";
-                        font-size: 12px;
-                        font-weight: 500;
-                        color: rgba(255, 255, 255, 0.65);
-                    }
-
-                    // 6px Track Capsule
-                    Rectangle {
-                        x: 0px;
-                        y: 22px;
-                        width: parent.width;
-                        height: 6px;
-                        border-radius: 3px;
-                        background: rgba(120, 120, 128, 0.38);
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 4) ? 1.5px : 0px;
-                        border-color: #ffffff;
-                        clip: true;
-
-                        Rectangle {
-                            x: 0px;
-                            y: 0px;
-                            width: clamp(root.transparency_value * parent.width, 0px, parent.width);
-                            height: 100%;
-                            background: #0088FF;
-                        }
-
-                        TouchArea {
-                            moved => {
-                                if (self.pressed) {
-                                    root.set_transparency(clamp(self.mouse-x / parent.width, 0.0, 1.0));
-                                }
-                            }
-                            clicked => {
-                                root.set_transparency(clamp(self.mouse-x / parent.width, 0.0, 1.0));
-                            }
-                        }
-                    }
-
-                    // iOS 27 White Capsule Thumb (38px x 22px)
-                    Rectangle {
-                        x: clamp(root.transparency_value * (parent.width - 38px), 0px, parent.width - 38px);
-                        y: 14px;
-                        width: 38px;
-                        height: 22px;
-                        border-radius: 11px;
-                        background: #ffffff;
-                        border-width: (root.in_appearance_panel && root.appearance_focus_index == 4) ? 2px : 0.5px;
-                        border-color: (root.in_appearance_panel && root.appearance_focus_index == 4) ? #0088FF : rgba(0, 0, 0, 0.15);
-
-                        Rectangle {
-                            x: (parent.width - 10px) / 2;
-                            y: (parent.height - 3px) / 2;
-                            width: 10px;
-                            height: 3px;
-                            border-radius: 1.5px;
-                            background: #0088FF;
-                        }
-                    }
-                }
-
-                // 5. Toggle Chips (Indices 5..10) - exact liquid-rust demo chips
-                Rectangle {
-                    x: 20px;
-                    y: 258px;
-                    width: parent.width - 40px;
-                    height: 82px;
-
-                    Text {
-                        x: 0px;
-                        y: 0px;
-                        text: "VISUAL EFFECTS";
-                        font-size: 10.5px;
-                        font-weight: 600;
-                        letter-spacing: 0.5px;
-                        color: rgba(255, 255, 255, 0.55);
-                    }
-
-                    // Row 1 (Indices 5, 6, 7)
-                    Rectangle {
-                        x: 0px;
-                        y: 16px;
-                        width: parent.width;
-                        height: 30px;
-
-                        // Dark (Index 5)
-                        Rectangle {
-                            x: 0px;
-                            width: 78px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_dark ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 5) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "Dark";
-                                font-size: 12px; font-weight: root.opt_dark ? 600 : 500;
-                                color: root.opt_dark ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("dark"); } }
-                        }
-
-                        // More Contrast (Index 6)
-                        Rectangle {
-                            x: 86px;
-                            width: 120px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_contrast ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 6) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "More Contrast";
-                                font-size: 12px; font-weight: root.opt_contrast ? 600 : 500;
-                                color: root.opt_contrast ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("contrast"); } }
-                        }
-
-                        // Reduce Motion (Index 7)
-                        Rectangle {
-                            x: 214px;
-                            width: 122px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_reduce_motion ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 7) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "Reduce Motion";
-                                font-size: 12px; font-weight: root.opt_reduce_motion ? 600 : 500;
-                                color: root.opt_reduce_motion ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("reduce_motion"); } }
-                        }
-                    }
-
-                    // Row 2 (Indices 8, 9, 10)
-                    Rectangle {
-                        x: 0px;
-                        y: 52px;
-                        width: parent.width;
-                        height: 30px;
-
-                        // Reduce Transparency (Index 8)
-                        Rectangle {
-                            x: 0px;
-                            width: 154px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_reduce_transparency ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 8) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "Reduce Transparency";
-                                font-size: 12px; font-weight: root.opt_reduce_transparency ? 600 : 500;
-                                color: root.opt_reduce_transparency ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("reduce_transparency"); } }
-                        }
-
-                        // Physics (Index 9)
-                        Rectangle {
-                            x: 162px;
-                            width: 88px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_physics ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 9) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "Physics";
-                                font-size: 12px; font-weight: root.opt_physics ? 600 : 500;
-                                color: root.opt_physics ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("physics"); } }
-                        }
-
-                        // Liquid Merge (Index 10)
-                        Rectangle {
-                            x: 258px;
-                            width: 110px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: root.opt_liquid_merge ? #0088FF : rgba(120, 120, 128, 0.28);
-                            border-width: (root.in_appearance_panel && root.appearance_focus_index == 10) ? 2px : 0px;
-                            border-color: #ffffff;
-                            Text {
-                                width: 100%; height: 100%;
-                                vertical-alignment: center; horizontal-alignment: center;
-                                text: "Liquid Merge";
-                                font-size: 12px; font-weight: root.opt_liquid_merge ? 600 : 500;
-                                color: root.opt_liquid_merge ? #ffffff : #F5F5F7;
-                            }
-                            TouchArea { clicked => { root.toggle_chip("liquid_merge"); } }
-                        }
-                    }
-                }
-
-                // 6. Live Interactive Optical Lens Demonstrator (Real-Time Physics)
-                Rectangle {
-                    x: 20px;
-                    y: 356px;
-                    width: parent.width - 40px;
-                    height: 84px;
-                    border-radius: 18px;
+                    y: 68px;
+                    width: 416px;
+                    height: 234px;
+                    border-radius: 14px;
                     clip: true;
 
-                    // Refracted wallpaper substrate
+                    // Photographic Wallpaper Background
                     Image {
-                        x: -(482px);
-                        y: -(384px);
-                        width: root.width;
-                        height: root.height;
-                        image-fit: cover;
-                        source: root.dock_frost_image;
-                    }
-
-                    // Translucent Tint
-                    Rectangle {
+                        x: 0px;
+                        y: 0px;
                         width: 100%;
                         height: 100%;
-                        background: (root.current_material == "Tinted") ?
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(0, 136, 255, 0.25) 25%, rgba(0, 68, 160, 0.45) 70%, rgba(6, 12, 24, 0.65) 100%) :
-                            (root.current_material == "Clear") ?
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.01) 25%, rgba(12, 16, 22, 0.25) 100%) :
-                            @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 25%, rgba(18, 22, 28, 0.45) 65%, rgba(10, 14, 18, 0.62) 100%);
+                        image-fit: cover;
+                        source: (root.wallpaper_idx == 0) ? @image-url("assets/wallpapers/misty.jpg") :
+                                (root.wallpaper_idx == 1) ? @image-url("assets/wallpapers/cove.jpg") :
+                                (root.wallpaper_idx == 2) ? @image-url("assets/wallpapers/forest.jpg") :
+                                (root.wallpaper_idx == 3) ? @image-url("assets/wallpapers/valley.jpg") :
+                                (root.wallpaper_idx == 4) ? @image-url("assets/wallpapers/night.jpg") :
+                                (root.wallpaper_idx == 5) ? @image-url("assets/wallpapers/peaks.jpg") :
+                                (root.wallpaper_idx == 6) ? @image-url("assets/wallpapers/bridge.jpg") :
+                                (root.wallpaper_idx == 7) ? @image-url("assets/wallpapers/ridge.jpg") :
+                                (root.wallpaper_idx == 8) ? @image-url("assets/wallpapers/golden.jpg") :
+                                (root.wallpaper_idx == 9) ? @image-url("assets/wallpapers/summit.jpg") :
+                                (root.wallpaper_idx == 10) ? @image-url("assets/wallpapers/goldcoast.jpg") :
+                                (root.wallpaper_idx == 11) ? @image-url("assets/wallpapers/sydney.jpg") :
+                                (root.wallpaper_idx == 12) ? @image-url("assets/wallpapers/amber.jpg") :
+                                (root.wallpaper_idx == 13) ? @image-url("assets/wallpapers/mint.jpg") :
+                                @image-url("assets/wallpapers/alpine.jpg");
                     }
 
-                    // Specular Lit Top Rim Glint
-                    Rectangle {
-                        x: 8px;
-                        y: 1px;
-                        width: parent.width - 16px;
-                        height: 1.25px;
-                        background: @linear-gradient(90deg, rgba(255, 255, 255, 0.0) 0%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0.0) 100%);
+                    // Mini Clock & Caption
+                    Text {
+                        x: 14px;
+                        y: 10px;
+                        text: root.clock_text;
+                        font-size: 14px;
+                        font-weight: 700;
+                        color: #ffffff;
+                    }
+                    Text {
+                        x: 14px;
+                        y: 28px;
+                        text: root.focused_caption;
+                        font-size: 8px;
+                        font-weight: 500;
+                        color: rgba(255, 255, 255, 0.85);
                     }
 
-                    // Demonstrator Glass Lens (Squircle or Round with Snell refraction)
+                    // Mini Utilities Pill
                     Rectangle {
-                        x: (parent.width - (root.current_focus_style == "Round" ? 72px : 170px)) / 2;
-                        y: (root.current_focus_style == "Round" ? 6px : 12px);
-                        width: (root.current_focus_style == "Round") ? 72px : 170px;
-                        height: (root.current_focus_style == "Round") ? 72px : 60px;
-                        opacity: 1.0;
+                        x: parent.width - 156px;
+                        y: 10px;
+                        width: 142px;
+                        height: 18px;
+                        border-radius: 9px;
+                        background: rgba(255, 255, 255, 0.14);
+                        clip: true;
 
-                        Image {
+                        Text {
                             width: 100%;
                             height: 100%;
-                            source: (root.current_focus_style == "Round") ? root.round_focus_lens_image : root.focus_lens_image;
-                        }
-
-                        Text {
-                            x: 0px;
-                            y: (root.current_focus_style == "Round" ? 20px : 12px);
-                            width: parent.width;
+                            vertical-alignment: center;
                             horizontal-alignment: center;
-                            text: root.appearance_preset + " Glass";
-                            font-size: (root.current_focus_style == "Round" ? 11px : 13px);
-                            font-weight: 700;
-                            color: #ffffff;
-                        }
-
-                        Text {
-                            x: 0px;
-                            y: (root.current_focus_style == "Round" ? 38px : 32px);
-                            width: parent.width;
-                            horizontal-alignment: center;
-                            text: (root.current_focus_style == "Round") ? "η = 1.50" : ("η = 1.50 · depth " + round(12.0 + 40.0 * root.refraction_value) + "pt");
-                            font-size: 10px;
+                            text: "Art Mode · All apps · Inputs · Settings";
+                            font-size: 6.5px;
                             font-weight: 500;
-                            color: rgba(255, 255, 255, 0.75);
+                            color: rgba(255, 255, 255, 0.90);
                         }
                     }
 
-                    // Outer perimeter hairline
+                    // Mini HDMI Pill
+                    Rectangle {
+                        x: (parent.width - 164px) / 2;
+                        y: 122px;
+                        width: 164px;
+                        height: 16px;
+                        border-radius: 8px;
+                        background: rgba(255, 255, 255, 0.12);
+                        clip: true;
+
+                        Text {
+                            width: 100%;
+                            height: 100%;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            text: "HDMI 1 · Mac   HDMI 2   HDMI 3   AV";
+                            font-size: 7.5px;
+                            font-weight: 500;
+                            color: rgba(255, 255, 255, 0.85);
+                        }
+                    }
+
+                    // Mini Dock (Carousel)
+                    if (root.current_layout == "Dock"): Rectangle {
+                        x: (parent.width - 320px) / 2;
+                        y: 146px;
+                        width: 320px;
+                        height: 64px;
+                        border-radius: 16px;
+                        clip: true;
+
+                        // Co-located blurred wallpaper substrate
+                        Image {
+                            x: -((parent.width - 320px) / 2);
+                            y: -146px;
+                            width: 416px;
+                            height: 234px;
+                            image-fit: cover;
+                            source: root.dock_frost_image;
+                        }
+
+                        // Translucent tint
+                        Rectangle {
+                            width: 100%;
+                            height: 100%;
+                            background: (root.current_material == "Tinted") ?
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.28) 0%, rgba(0, 136, 255, 0.25) 25%, rgba(0, 68, 160, 0.45) 70%, rgba(6, 12, 24, 0.65) 100%) :
+                                (root.current_material == "Obsidian Tint") ?
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.12) 0%, rgba(14, 18, 26, 0.72) 25%, rgba(6, 10, 16, 0.88) 100%) :
+                                (root.current_material == "Clear") ?
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.01) 25%, rgba(12, 16, 22, 0.25) 100%) :
+                                @linear-gradient(155deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 25%, rgba(18, 22, 28, 0.45) 65%, rgba(10, 14, 18, 0.62) 100%);
+                        }
+
+                        // Live Focus Item Lens on Focused Preview App (index 2)
+                        if (root.current_focus_style == "Glass Plate"): Rectangle {
+                            x: 4px + 2 * 62px;
+                            y: 4px;
+                            width: 60px;
+                            height: 56px;
+                            border-radius: 12px;
+                            clip: true;
+
+                            Image {
+                                width: 100%;
+                                height: 100%;
+                                source: root.focus_lens_image;
+                            }
+                        }
+
+                        if (root.current_focus_style == "Round"): Rectangle {
+                            x: 4px + 2 * 62px + (60px - 52px) / 2;
+                            y: 6px;
+                            width: 52px;
+                            height: 52px;
+                            border-radius: 26px;
+                            clip: true;
+
+                            Image {
+                                width: 100%;
+                                height: 100%;
+                                source: root.round_focus_lens_image;
+                            }
+                        }
+
+                        // App items preview
+                        for app[i] in root.apps: Rectangle {
+                            if (i < 5): Rectangle {
+                                x: 4px + i * 62px;
+                                y: 4px;
+                                width: 60px;
+                                height: 56px;
+
+                                Image {
+                                    x: (parent.width - 22px) / 2;
+                                    y: 8px;
+                                    width: 22px;
+                                    height: 22px;
+                                    image-fit: contain;
+                                    colorize: (root.current_icon_pack == "Full Color") ? app.brand_color : #ffffff;
+                                    source: app.icon;
+                                }
+
+                                Text {
+                                    x: 0px;
+                                    y: 34px;
+                                    width: parent.width;
+                                    horizontal-alignment: center;
+                                    text: app.name;
+                                    font-size: 8px;
+                                    font-weight: (i == 2) ? 700 : 500;
+                                    color: (i == 2) ? #ffffff : rgba(255, 255, 255, 0.75);
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+
+                    // Mini List (Vertical Column)
+                    if (root.current_layout == "List"): Rectangle {
+                        x: 20px;
+                        y: 48px;
+                        width: 160px;
+                        height: 170px;
+
+                        for app[i] in root.apps: Rectangle {
+                            if (i < 6): Rectangle {
+                                y: i * 26px;
+                                width: 150px;
+                                height: 22px;
+                                border-radius: 6px;
+
+                                if (i == 2): Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+                                    border-radius: 6px;
+                                    background: rgba(255, 255, 255, 0.22);
+                                }
+
+                                Image {
+                                    x: 6px;
+                                    y: 3px;
+                                    width: 16px;
+                                    height: 16px;
+                                    image-fit: contain;
+                                    colorize: (root.current_icon_pack == "Full Color") ? app.brand_color : #ffffff;
+                                    source: app.icon;
+                                }
+
+                                Text {
+                                    x: 28px;
+                                    y: 3px;
+                                    text: app.name;
+                                    font-size: 9px;
+                                    font-weight: (i == 2) ? 700 : 500;
+                                    color: #ffffff;
+                                }
+                            }
+                        }
+                    }
+
+                    // Stage border outline
                     Rectangle {
                         width: 100%;
                         height: 100%;
-                        border-radius: 18px;
-                        border-width: 0.75px;
-                        border-color: rgba(255, 255, 255, 0.20);
+                        border-radius: 14px;
+                        border-width: 1px;
+                        border-color: rgba(255, 255, 255, 0.22);
                     }
                 }
 
-                // 7. Navigation Hint Bar
+                // 3. Liquid Glass Live Optics Status Readout Card
+                Rectangle {
+                    x: 20px;
+                    y: 312px;
+                    width: 416px;
+                    height: 116px;
+                    border-radius: 14px;
+                    background: rgba(0, 0, 0, 0.28);
+                    border-width: 0.75px;
+                    border-color: rgba(255, 255, 255, 0.16);
+
+                    Rectangle {
+                        x: 16px;
+                        y: 14px;
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 4px;
+                        background: #34C759;
+                    }
+
+                    Text {
+                        x: 32px;
+                        y: 10px;
+                        text: "Optical Simulation Active";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #ffffff;
+                    }
+
+                    Text {
+                        x: 16px;
+                        y: 32px;
+                        text: "• Snell Refraction: " + root.refraction_display + "  (η = 1.50, depth " + Math.round(12.0 + 40.0 * root.refraction_value) + "pt)";
+                        font-size: 10px;
+                        font-weight: 500;
+                        color: rgba(255, 255, 255, 0.85);
+                    }
+
+                    Text {
+                        x: 16px;
+                        y: 52px;
+                        text: "• Focus Style: " + root.current_focus_style + "  ·  Material: " + root.appearance_preset + " Glass";
+                        font-size: 10px;
+                        font-weight: 500;
+                        color: rgba(255, 255, 255, 0.85);
+                    }
+
+                    Text {
+                        x: 16px;
+                        y: 72px;
+                        text: "• Dock Layout: " + root.current_layout + "  ·  Icon Pack: " + root.current_icon_pack;
+                        font-size: 10px;
+                        font-weight: 500;
+                        color: rgba(255, 255, 255, 0.85);
+                    }
+
+                    Text {
+                        x: 16px;
+                        y: 92px;
+                        text: "• Performance: 60 FPS Native  ·  Zero-Latency Decoupled Pipeline";
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: #0088FF;
+                    }
+                }
+
+                // 4. Remote D-Pad Guidance Footer
                 Text {
                     x: 20px;
-                    y: 454px;
+                    y: 452px;
                     width: parent.width - 40px;
                     horizontal-alignment: center;
-                    text: "Left / Right Adjust Sliders  ·  OK Toggle  ·  Back Return";
-                    font-size: 10px;
-                    font-weight: 500;
-                    color: rgba(255, 255, 255, 0.60);
+                    text: "Left / Right Adjust Sliders  ·  OK Select / Toggle  ·  Back Return";
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: rgba(255, 255, 255, 0.70);
                 }
             }
         }
-
     }
 
     // ==========================================
