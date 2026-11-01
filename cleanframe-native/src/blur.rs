@@ -280,7 +280,48 @@ fn sample_bilinear(pixels: &[u8], width: usize, height: usize, x: f32, y: f32, c
     top * (1.0 - fy) + bot * fy
 }
 
-/// Signed distance and outward normal for the Dock rounded rectangle in 960x540 buffer space.
+#[allow(dead_code)]
+#[inline(always)]
+fn erf_approx(x: f32) -> f32 {
+    let c = x.clamp(-4.0, 4.0);
+    (c * (1.1283792 + 0.1003 * c * c)).tanh()
+}
+
+#[allow(dead_code)]
+#[inline(always)]
+fn phi(x: f32, sigma: f32) -> f32 {
+    0.5 + 0.5 * erf_approx(x / (sigma.max(1e-3) * 1.4142135))
+}
+
+/// Signed distance and outward normal for a squircle with Apple continuous corners (exponent n = 2.79).
+#[inline(always)]
+pub fn sdg_squircle(dx: f32, dy: f32, hw: f32, hh: f32, r: f32) -> (f32, f32, f32) {
+    let ax = dx.abs();
+    let ay = dy.abs();
+    let sx = if dx >= 0.0 { 1.0 } else { -1.0 };
+    let sy = if dy >= 0.0 { 1.0 } else { -1.0 };
+
+    let qx = ax - (hw - r);
+    let qy = ay - (hh - r);
+
+    const N: f32 = 2.79;
+    if qx > 0.0 && qy > 0.0 {
+        let qx_pow = qx.powf(N);
+        let qy_pow = qy.powf(N);
+        let l = (qx_pow + qy_pow).powf(1.0 / N);
+        let gx = (qx / l).powf(N - 1.0);
+        let gy = (qy / l).powf(N - 1.0);
+        let gl = (gx * gx + gy * gy).sqrt().max(1e-5);
+        let sd = (l - r) / gl;
+        (sd, sx * gx / gl, sy * gy / gl)
+    } else if qx > qy {
+        (qx - r, sx, 0.0)
+    } else {
+        (qy - r, 0.0, sy)
+    }
+}
+
+/// Signed distance and outward normal for the Dock squircle in 960x540 buffer space.
 /// Returns (signed_distance, normal_x, normal_y).
 /// Inside the dock, signed_distance < 0.0.
 #[inline(always)]
@@ -293,39 +334,30 @@ fn dock_sdf_and_normal(x: f32, y: f32) -> (f32, f32, f32) {
     const HH: f32 = 58.0;
     const CR: f32 = 26.0;
 
-    let dx = x - CX;
-    let dy = y - CY;
-    let ax = dx.abs();
-    let ay = dy.abs();
-    let sx = if dx >= 0.0 { 1.0 } else { -1.0 };
-    let sy = if dy >= 0.0 { 1.0 } else { -1.0 };
+    sdg_squircle(x - CX, y - CY, HW, HH, CR)
+}
 
-    let qx = ax - (HW - CR);
-    let qy = ay - (HH - CR);
+/// Squircle bevel slope: h(t) = (1 - (1 - t)^4)^(1/4).
+/// Exact flat-to-curve profile from Apple iOS kit and liquid-rust.
+#[inline(always)]
+fn bevel_slope(t: f32) -> f32 {
+    let u = 1.0 - t;
+    let u3 = u * u * u;
+    u3 * (1.0 - u3 * u).max(1e-5).powf(-0.75)
+}
 
-    if qx > 0.0 && qy > 0.0 {
-        // Rounded corner quadrant: smooth continuous circular arc
-        let dist = (qx * qx + qy * qy).sqrt();
-        let sd = dist - CR;
-        if dist > 1e-4 {
-            (sd, sx * (qx / dist), sy * (qy / dist))
-        } else {
-            (sd, sx * 0.7071068, sy * 0.7071068)
-        }
-    } else if qx > qy {
-        // Horizontal straight edge
-        let sd = qx - CR;
-        (sd, sx, 0.0)
-    } else {
-        // Vertical straight edge
-        let sd = qy - CR;
-        (sd, 0.0, sy)
-    }
+/// Lateral travel of a vertical ray refracted by a surface tilted by atan(slope).
+/// Exact Snell's Law implementation from liquid-rust glass.wgsl.
+#[inline(always)]
+fn refract_offset(slope: f32, eta: f32) -> f32 {
+    let theta = slope.atan();
+    let sin_theta = theta.sin();
+    (theta - (sin_theta / eta).clamp(-1.0, 1.0).asin()).tan()
 }
 
 /// Applies physical lens refraction (Snell's Law), chromatic dispersion (prism fringing),
 /// and continuous curvature to the Dock glass bevel.
-/// Modeled after optical physics in Apple Liquid Glass and liquid-glass-studio.
+/// Modeled after optical physics in Apple Liquid Glass and liquid-rust (al1h3n/liquid-rust).
 pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height: usize, ref_distance: f32) {
     if ref_distance <= 0.0 {
         return;
@@ -334,8 +366,10 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
 
     // Refraction bevel thickness: 24 pixels on a 960x540 screen (~48px on 1080p TV)
     const REF_THICKNESS: f32 = 24.0;
-    // Chromatic dispersion factor (wavelength split)
-    const DISPERSION: f32 = 0.055;
+    // Virtual glass index of refraction from liquid-rust
+    const ETA: f32 = 1.5;
+    // Chromatic dispersion factor from liquid-rust (optics.z * 0.25)
+    const DISPERSION: f32 = 0.20;
 
     // Bounding box of the Dock in 960x540 buffer space:
     let min_x = 100.max(0);
@@ -355,44 +389,42 @@ pub fn apply_glass_refraction_dispersion(pixels: &mut [u8], width: usize, height
             let dist_to_edge = -sd; // 0.0 at outer rim, REF_THICKNESS at flat interior
             let t = (dist_to_edge / REF_THICKNESS).clamp(0.0, 1.0);
 
-            // Ultra-smooth, fluid Liquid Glass optical lens curvature profile:
-            // C1-continuous at both endpoints:
-            // - At t = 0.0 (outer perimeter): displacement = 0.0 (seamlessly connects to wallpaper, zero pixel tearing!)
-            // - At t = 1.0 (flat interior): displacement = 0.0, derivative = 0.0 (flawless smooth blending into substrate)
-            // - In the bevel zone: gracefully peaks with smooth convex liquid curvature
-            let lens_curve = (1.0 - t).powi(2) * (t * std::f32::consts::PI).sin();
-            let disp = lens_curve * ref_distance;
+            // liquid-rust squircle bevel slope & Snell's law refraction
+            let slope = bevel_slope(t);
+            // Smooth edge transition over the first 2 pixels so displacement meets wallpaper seamlessly
+            let edge_blend = (t * 8.0).min(1.0);
+            let reach = ref_distance * edge_blend;
 
-            // Deflection vector pointing inward (into the glass slab)
-            let offset_x = -nx * disp;
-            let offset_y = -ny * disp;
+            let off_g = reach * refract_offset(slope, ETA);
+            let off_r = reach * refract_offset(slope, (ETA - DISPERSION).max(1.01));
+            let off_b = reach * refract_offset(slope, ETA + DISPERSION);
 
             let cur_x = x as f32 + 0.5;
             let cur_y = y as f32 + 0.5;
 
-            // Sub-pixel high-precision bilinear interpolation across 960x540
+            // Deflection vector pointing inward (into the glass slab along normal)
             let red = sample_bilinear(
                 &src,
                 width,
                 height,
-                cur_x + offset_x * (1.0 - DISPERSION),
-                cur_y + offset_y * (1.0 - DISPERSION),
+                cur_x - nx * off_r,
+                cur_y - ny * off_r,
                 0,
             );
             let green = sample_bilinear(
                 &src,
                 width,
                 height,
-                cur_x + offset_x,
-                cur_y + offset_y,
+                cur_x - nx * off_g,
+                cur_y - ny * off_g,
                 1,
             );
             let blue = sample_bilinear(
                 &src,
                 width,
                 height,
-                cur_x + offset_x * (1.0 + DISPERSION),
-                cur_y + offset_y * (1.0 + DISPERSION),
+                cur_x - nx * off_b,
+                cur_y - ny * off_b,
                 2,
             );
 
@@ -487,4 +519,277 @@ pub fn blur_wallpaper_bytes(bytes: &[u8]) -> Option<Image> {
     let (clean, _) = blur_wallpaper_bytes_pair(bytes, 40, 28.0)?;
     Some(clean)
 }
+
+/// Renders an optical liquid glass focus lens texture with Snell's law refraction,
+/// chromatic dispersion (prism fringing), directional specular rim glint,
+/// soft inner rim shadow, and frost blur diffusion based on liquid-rust.
+pub fn render_focus_lens_texture(
+    width: u32,
+    height: u32,
+    radius: f32,
+    refraction_dist: f32,
+    _blur_radius: f32,
+    material: &str,
+) -> Image {
+    let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width, height);
+    let slice = buffer.make_mut_slice();
+
+    let cx = width as f32 * 0.5;
+    let cy = height as f32 * 0.5;
+    let padding = 10.0f32;
+    let hw = cx - padding;
+    let hh = cy - padding;
+    let depth = (16.0 + (refraction_dist / 48.0) * 32.0).clamp(16.0, 48.0);
+    const ETA: f32 = 1.5;
+    const DISPERSION: f32 = 0.20;
+
+    let (base_rgb, base_alpha) = match material {
+        "Obsidian Tint" => ([16.0f32, 22.0, 32.0], 0.14),
+        "Clear" => ([255.0, 255.0, 255.0], 0.035), // Apple kit Clear tone lift (lift: 0.063 in liquid-rust, crystal clear, zero milky haze)
+        "Regular" => ([240.0, 245.0, 255.0], 0.05),
+        "Tinted" => ([0.0, 136.0, 255.0], 0.16),
+        "Soft" => ([245.0, 242.0, 238.0], 0.04),
+        _ /* Frost */ => ([235.0, 245.0, 255.0], 0.05),
+    };
+
+    for y in 0..height {
+        let py = y as f32 + 0.5;
+        let dy = py - cy;
+        let row_offset = (y * width) as usize;
+
+        for x in 0..width {
+            let px = x as f32 + 0.5;
+            let dx = px - cx;
+
+            let (sd, _nx, ny) = sdg_squircle(dx, dy, hw, hh, radius);
+
+            // Outside the lens boundary: 100% transparent (no crude drop shadow or dark border)
+            if sd >= 0.0 {
+                slice[row_offset + x as usize] = Rgba8Pixel { r: 0, g: 0, b: 0, a: 0 };
+                continue;
+            }
+
+            let cov = (0.5 - sd).clamp(0.0, 1.0);
+            let dist_to_edge = -sd;
+            let t = (dist_to_edge / depth).clamp(0.0, 1.0);
+
+            // Flat interior of lens (t >= 1.0): crystal clear glass tone lift
+            if t >= 1.0 {
+                slice[row_offset + x as usize] = Rgba8Pixel {
+                    r: base_rgb[0] as u8,
+                    g: base_rgb[1] as u8,
+                    b: base_rgb[2] as u8,
+                    a: (base_alpha * 255.0 * cov) as u8,
+                };
+                continue;
+            }
+
+            // Directional overhead specular glint: only on upper crown facing light L=(0,-1).
+            // Zero on left/right/bottom (NO WHITE BORDER!).
+            let facing = -ny;
+            let specular = if facing > 0.25 && dy < 0.0 {
+                let glint = (sd / 1.0).exp() * facing.powi(2);
+                glint * 80.0
+            } else {
+                0.0
+            };
+
+            // Ambient bottom catch-light (very subtle soft ground bounce)
+            let bottom_rim = if facing < -0.35 && dy > 0.0 {
+                let glint = (sd / 1.0).exp() * (-facing).powi(2);
+                glint * 24.0
+            } else {
+                0.0
+            };
+
+            // Outer refractive rim groove (matching liquid-rust inner shadow / edge occlusion)
+            let rim_groove = if dist_to_edge < 2.4 {
+                (1.0 - dist_to_edge / 2.4) * 32.0
+            } else {
+                0.0
+            };
+
+            // Snell's Law Refraction & Chromatic Dispersion prism fringing
+            let mut cyan_fringe = 0.0f32;
+            let mut amber_fringe = 0.0f32;
+
+            if refraction_dist > 0.0 && t < 1.0 {
+                let slope = bevel_slope(t);
+                let _off_g = refraction_dist * refract_offset(slope, ETA);
+                let off_r = refraction_dist * refract_offset(slope, (ETA - DISPERSION).max(1.01));
+                let off_b = refraction_dist * refract_offset(slope, ETA + DISPERSION);
+
+                let disp_sep = (off_b - off_r).abs();
+                let cyan_factor = (1.0 - (t / 0.38).min(1.0)).powi(2) * (disp_sep / 3.0).min(1.0);
+                cyan_fringe = cyan_factor * 28.0;
+
+                let amber_factor = (1.0 - ((t - 0.45) / 0.25).abs()).max(0.0) * (disp_sep / 3.0).min(1.0);
+                amber_fringe = amber_factor * 22.0;
+            }
+
+            let r_prism = amber_fringe;
+            let g_prism = cyan_fringe * 0.72 + amber_fringe * 0.55;
+            let b_prism = cyan_fringe * 1.15 + amber_fringe * 0.05;
+
+            let light_col = specular + bottom_rim;
+            let cur_r = (base_rgb[0] + light_col + r_prism - rim_groove).clamp(0.0, 255.0);
+            let cur_g = (base_rgb[1] + light_col + g_prism - rim_groove).clamp(0.0, 255.0);
+            let cur_b = (base_rgb[2] + light_col + b_prism - rim_groove).clamp(0.0, 255.0);
+
+            let disp_alpha = cyan_fringe * 0.20 + amber_fringe * 0.16;
+            let edge_alpha = specular * 0.32 + bottom_rim * 0.18 + disp_alpha + rim_groove * 0.20;
+            let final_a = ((base_alpha * 255.0 + edge_alpha * (1.0 - t)) * cov).clamp(0.0, 255.0) as u8;
+
+            slice[row_offset + x as usize] = Rgba8Pixel {
+                r: cur_r as u8,
+                g: cur_g as u8,
+                b: cur_b as u8,
+                a: final_a,
+            };
+        }
+    }
+
+    Image::from_rgba8(buffer)
+}
+
+/// Signed distance and outward normal for a perfect circle.
+#[inline(always)]
+pub fn sdg_circle(dx: f32, dy: f32, r: f32) -> (f32, f32, f32) {
+    let dist = (dx * dx + dy * dy).sqrt();
+    let sd = dist - r;
+    let (nx, ny) = if dist > 1e-4 {
+        (dx / dist, dy / dist)
+    } else {
+        (0.0, -1.0)
+    };
+    (sd, nx, ny)
+}
+
+/// Renders a circular optical liquid glass focus lens texture with Snell's law refraction,
+/// 360° radial chromatic dispersion, directional spherical dome specular glint, and edge hairline burn.
+pub fn render_round_focus_lens_texture(
+    size: u32,
+    radius: f32,
+    refraction_dist: f32,
+    _blur_radius: f32,
+    material: &str,
+) -> Image {
+    let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(size, size);
+    let slice = buffer.make_mut_slice();
+
+    let cx = size as f32 * 0.5;
+    let cy = size as f32 * 0.5;
+    let depth = (14.0 + (refraction_dist / 48.0) * 28.0).clamp(14.0, 42.0);
+    const ETA: f32 = 1.5;
+    const DISPERSION: f32 = 0.20;
+
+    let (base_rgb, base_alpha) = match material {
+        "Obsidian Tint" => ([16.0f32, 22.0, 32.0], 0.14),
+        "Clear" => ([255.0, 255.0, 255.0], 0.035), // Apple kit Clear tone lift (lift: 0.063 in liquid-rust, crystal clear, zero milky haze)
+        "Regular" => ([240.0, 245.0, 255.0], 0.05),
+        "Tinted" => ([0.0, 136.0, 255.0], 0.16),
+        "Soft" => ([245.0, 242.0, 238.0], 0.04),
+        _ /* Frost */ => ([235.0, 245.0, 255.0], 0.05),
+    };
+
+    for y in 0..size {
+        let py = y as f32 + 0.5;
+        let dy = py - cy;
+        let row_offset = (y * size) as usize;
+
+        for x in 0..size {
+            let px = x as f32 + 0.5;
+            let dx = px - cx;
+
+            let (sd, _nx, ny) = sdg_circle(dx, dy, radius);
+
+            // Outside the lens boundary: 100% transparent (no crude drop shadow or dark border)
+            if sd >= 0.0 {
+                slice[row_offset + x as usize] = Rgba8Pixel { r: 0, g: 0, b: 0, a: 0 };
+                continue;
+            }
+
+            let cov = (0.5 - sd).clamp(0.0, 1.0);
+            let dist_to_edge = -sd;
+            let t = (dist_to_edge / depth).clamp(0.0, 1.0);
+
+            // Flat interior of lens (t >= 1.0): crystal clear glass tone lift
+            if t >= 1.0 {
+                slice[row_offset + x as usize] = Rgba8Pixel {
+                    r: base_rgb[0] as u8,
+                    g: base_rgb[1] as u8,
+                    b: base_rgb[2] as u8,
+                    a: (base_alpha * 255.0 * cov) as u8,
+                };
+                continue;
+            }
+
+            // Directional overhead specular glint: only on upper crown facing light L=(0,-1).
+            // Zero on left/right/bottom (NO WHITE BORDER!).
+            let facing = -ny;
+            let specular = if facing > 0.25 && dy < 0.0 {
+                let glint = (sd / 1.0).exp() * facing.powi(2);
+                glint * 80.0
+            } else {
+                0.0
+            };
+
+            // Ambient bottom catch-light (very subtle soft ground bounce)
+            let bottom_rim = if facing < -0.35 && dy > 0.0 {
+                let glint = (sd / 1.0).exp() * (-facing).powi(2);
+                glint * 24.0
+            } else {
+                0.0
+            };
+
+            // Outer refractive rim groove (matching liquid-rust inner shadow / edge occlusion)
+            let rim_groove = if dist_to_edge < 2.4 {
+                (1.0 - dist_to_edge / 2.4) * 32.0
+            } else {
+                0.0
+            };
+
+            // Snell Refraction & Chromatic Dispersion prism fringing
+            let mut cyan_fringe = 0.0f32;
+            let mut amber_fringe = 0.0f32;
+
+            if refraction_dist > 0.0 && t < 1.0 {
+                let slope = bevel_slope(t);
+                let _off_g = refraction_dist * refract_offset(slope, ETA);
+                let off_r = refraction_dist * refract_offset(slope, (ETA - DISPERSION).max(1.01));
+                let off_b = refraction_dist * refract_offset(slope, ETA + DISPERSION);
+
+                let disp_sep = (off_b - off_r).abs();
+                let cyan_factor = (1.0 - (t / 0.38).min(1.0)).powi(2) * (disp_sep / 3.0).min(1.0);
+                cyan_fringe = cyan_factor * 28.0;
+
+                let amber_factor = (1.0 - ((t - 0.45) / 0.25).abs()).max(0.0) * (disp_sep / 3.0).min(1.0);
+                amber_fringe = amber_factor * 22.0;
+            }
+
+            let r_prism = amber_fringe;
+            let g_prism = cyan_fringe * 0.72 + amber_fringe * 0.55;
+            let b_prism = cyan_fringe * 1.15 + amber_fringe * 0.05;
+
+            let light_col = specular + bottom_rim;
+            let cur_r = (base_rgb[0] + light_col + r_prism - rim_groove).clamp(0.0, 255.0);
+            let cur_g = (base_rgb[1] + light_col + g_prism - rim_groove).clamp(0.0, 255.0);
+            let cur_b = (base_rgb[2] + light_col + b_prism - rim_groove).clamp(0.0, 255.0);
+
+            let disp_alpha = cyan_fringe * 0.20 + amber_fringe * 0.16;
+            let edge_alpha = specular * 0.32 + bottom_rim * 0.18 + disp_alpha + rim_groove * 0.20;
+            let final_a = ((base_alpha * 255.0 + edge_alpha * (1.0 - t)) * cov).clamp(0.0, 255.0) as u8;
+
+            slice[row_offset + x as usize] = Rgba8Pixel {
+                r: cur_r as u8,
+                g: cur_g as u8,
+                b: cur_b as u8,
+                a: final_a,
+            };
+        }
+    }
+
+    Image::from_rgba8(buffer)
+}
+
 

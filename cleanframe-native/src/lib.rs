@@ -68,6 +68,7 @@ pub const APP_NAMES: [&str; 8] = [
     "Settings",
 ];
 
+#[allow(dead_code)]
 const APP_PACKAGES: [&str; 8] = [
     "org.smarttube.stable",
     "com.spotify.tv.android",
@@ -101,6 +102,24 @@ pub const REFRACTION_LEVEL_DESCS: [&str; 4] = [
 ];
 pub const REFRACTION_DISTANCES: [f32; 4] = [0.0, 14.0, 28.0, 48.0];
 
+pub const FOCUS_REFRACTION_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
+pub const FOCUS_REFRACTION_DESCS: [&str; 4] = [
+    "No edge refraction · Pure flat glass plate",
+    "Subtle lens bend · Gentle optical deflection on bevel",
+    "Default refraction · Balanced Apple Liquid Glass prism bevel",
+    "Strong refraction · Deep refractive lens with chromatic dispersion",
+];
+pub const FOCUS_REFRACTION_DISTANCES: [f32; 4] = [0.0, 12.0, 26.0, 48.0];
+
+pub const FOCUS_BLUR_NAMES: [&str; 4] = ["Off", "Subtle", "Default", "Strong"];
+pub const FOCUS_BLUR_DESCS: [&str; 4] = [
+    "Crystal clear · High-transparency optical substrate",
+    "Subtle frost · Gentle micro-diffusion glow",
+    "Default frost · Balanced silky frosted glass diffusion",
+    "Strong frost · Deep atmospheric frosted glass diffusion",
+];
+pub const FOCUS_BLUR_RADII: [f32; 4] = [0.0, 8.0, 18.0, 32.0];
+
 #[derive(Default)]
 pub struct AppState {
     pub active_zone: &'static str, // "apps" | "inputs" | "util" | "media"
@@ -113,8 +132,18 @@ pub struct AppState {
     pub settings_detail: bool,
     pub current_group: &'static str,
     pub wallpaper_idx: usize,
-    pub blur_level: usize, // 0..3 (default: 2)
-    pub refraction_level: usize, // 0..3 (default: 2)
+    pub refraction: f32, // Default: 1.00 (Apple liquid-rust demo default)
+    pub appearance_preset: &'static str, // Default: "Clear" (Apple kit Clear glass)
+    pub transparency: f32, // Default: 0.00 (Clear)
+    pub dark_mode: bool,
+    pub increase_contrast: bool,
+    pub reduce_motion: bool,
+    pub reduce_transparency: bool,
+    pub physics: bool,
+    pub liquid_merge: bool,
+    pub in_appearance_panel: bool,
+    pub appearance_focus_index: i32,
+    pub blur_level: usize,
     pub layout_mode: &'static str,
     pub typography: &'static str,
     pub material: &'static str,
@@ -126,7 +155,13 @@ pub struct AppState {
     pub now_playing_title: String,
     pub now_playing_artist: String,
     pub now_playing_playing: bool,
+    pub all_apps_open: bool,
+    pub selected_all_app: usize,
+    pub all_apps_action_open: bool,
+    pub selected_all_app_action: usize,
+    pub dock_indices: Vec<usize>,
     pub frost_cache: std::cell::RefCell<std::collections::HashMap<usize, (slint::Image, slint::Image)>>,
+    pub focus_lens_cache: std::cell::RefCell<Option<(slint::Image, slint::Image, slint::Image)>>,
 }
 
 impl AppState {
@@ -140,8 +175,16 @@ impl AppState {
         } else {
             WALLPAPER_FULL[0]
         };
-        let radius = BLUR_RADII[self.blur_level.min(3)];
-        let ref_dist = REFRACTION_DISTANCES[self.refraction_level.min(3)];
+        let radius = if self.reduce_transparency {
+            28
+        } else if self.appearance_preset == "Clear" {
+            8
+        } else if self.appearance_preset == "Regular" {
+            16
+        } else {
+            12
+        };
+        let ref_dist = self.refraction * 48.0;
         if let Some(pair) = blur::blur_wallpaper_bytes_pair(bytes, radius, ref_dist) {
             cache.insert(idx, pair.clone());
             pair
@@ -152,6 +195,30 @@ impl AppState {
 
     pub fn get_frost_image(&self, idx: usize) -> slint::Image {
         self.get_frost_images(idx).0
+    }
+
+    pub fn get_focus_lens_images(&self) -> (slint::Image, slint::Image, slint::Image) {
+        let mut cache = self.focus_lens_cache.borrow_mut();
+        if let Some(tuple) = cache.as_ref() {
+            return tuple.clone();
+        }
+        let ref_dist = self.refraction * 48.0;
+        let blur_r = if self.reduce_transparency {
+            26.0
+        } else if self.appearance_preset == "Clear" {
+            6.0
+        } else {
+            14.0
+        };
+        // Dock squircle lens: 132x92 at 2x = 264x184, radius = 40.0
+        let dock_lens = blur::render_focus_lens_texture(264, 184, 40.0, ref_dist, blur_r, self.appearance_preset);
+        // List capsule lens: 260x48 at 2x = 520x96, radius = 48.0 (capsule)
+        let list_lens = blur::render_focus_lens_texture(520, 96, 48.0, ref_dist * 0.85, blur_r * 0.85, self.appearance_preset);
+        // Round circular lens: 92x92 at 2x = 184x184, radius = 82.0 (circle)
+        let round_lens = blur::render_round_focus_lens_texture(184, 82.0, ref_dist, blur_r, self.appearance_preset);
+        let tuple = (dock_lens, list_lens, round_lens);
+        *cache = Some(tuple.clone());
+        tuple
     }
 }
 
@@ -303,6 +370,186 @@ fn launch_settings_env(env: &mut jni::JNIEnv, activity: &jni::objects::JObject) 
         let _ = env.call_method(&intent, "addFlags", "(I)Landroid/content/Intent;", &[0x10000000i32.into()]);
         log::info!("Launching Android TV System Settings via fallback");
         let _ = env.call_method(activity, "startActivity", "(Landroid/content/Intent;)V", &[(&intent).into()]);
+    }
+}
+
+#[cfg(target_os = "android")]
+fn query_installed_apps(app: &slint::android::AndroidApp) -> Vec<(String, String)> {
+    let mut result = Vec::new();
+    unsafe {
+        let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
+        if vm_ptr.is_null() { return result; }
+        let vm = match jni::JavaVM::from_raw(vm_ptr) {
+            Ok(v) => v,
+            Err(_) => return result,
+        };
+        let mut env = match vm.attach_current_thread() {
+            Ok(e) => e,
+            Err(_) => return result,
+        };
+        let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+
+        let pm = match env.call_method(&activity, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]) {
+            Ok(val) => match val.l() {
+                Ok(obj) => obj,
+                Err(_) => return result,
+            },
+            Err(_) => return result,
+        };
+
+        let action_main = match env.new_string("android.intent.action.MAIN") {
+            Ok(s) => s,
+            Err(_) => return result,
+        };
+        let cat_leanback = match env.new_string("android.intent.category.LEANBACK_LAUNCHER") {
+            Ok(s) => s,
+            Err(_) => return result,
+        };
+        let cat_launcher = match env.new_string("android.intent.category.LAUNCHER") {
+            Ok(s) => s,
+            Err(_) => return result,
+        };
+
+        let intent_class = match env.find_class("android/content/Intent") {
+            Ok(c) => c,
+            Err(_) => return result,
+        };
+
+        let mut seen_packages = std::collections::HashSet::new();
+
+        for cat in [&cat_leanback, &cat_launcher] {
+            if let Ok(intent_obj) = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[(&action_main).into()]) {
+                let _ = env.call_method(&intent_obj, "addCategory", "(Ljava/lang/String;)Landroid/content/Intent;", &[cat.into()]);
+                if let Ok(list_val) = env.call_method(&pm, "queryIntentActivities", "(Landroid/content/Intent;I)Ljava/util/List;", &[(&intent_obj).into(), 0i32.into()]) {
+                    if let Ok(list_obj) = list_val.l() {
+                        if !list_obj.as_raw().is_null() {
+                            if let Ok(size_val) = env.call_method(&list_obj, "size", "()I", &[]) {
+                                let size = size_val.i().unwrap_or(0);
+                                for i in 0..size {
+                                    if let Ok(item_val) = env.call_method(&list_obj, "get", "(I)Ljava/lang/Object;", &[i.into()]) {
+                                        if let Ok(resolve_info) = item_val.l() {
+                                            if let Ok(act_info_val) = env.get_field(&resolve_info, "activityInfo", "Landroid/content/pm/ActivityInfo;") {
+                                                if let Ok(act_info) = act_info_val.l() {
+                                                    if let Ok(pkg_val) = env.get_field(&act_info, "packageName", "Ljava/lang/String;") {
+                                                        if let Ok(pkg_obj) = pkg_val.l() {
+                                                            let pkg_jstring = jni::objects::JString::from(pkg_obj);
+                                                            let pkg_opt = match env.get_string(&pkg_jstring) {
+                                                                Ok(s) => Some(s.to_string_lossy().to_string()),
+                                                                Err(_) => None,
+                                                            };
+                                                            if let Some(pkg) = pkg_opt {
+                                                                if pkg != "com.cleanframe.tv" && !seen_packages.contains(&pkg) {
+                                                                    seen_packages.insert(pkg.clone());
+                                                                    let mut app_label = pkg.clone();
+                                                                    if let Ok(label_val) = env.call_method(&resolve_info, "loadLabel", "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;", &[(&pm).into()]) {
+                                                                        if let Ok(label_obj) = label_val.l() {
+                                                                            if !label_obj.as_raw().is_null() {
+                                                                                if let Ok(str_val) = env.call_method(&label_obj, "toString", "()Ljava/lang/String;", &[]) {
+                                                                                    if let Ok(str_obj) = str_val.l() {
+                                                                                        let str_j = jni::objects::JString::from(str_obj);
+                                                                                        let label_opt = match env.get_string(&str_j) {
+                                                                                            Ok(s) => Some(s.to_string_lossy().to_string()),
+                                                                                            Err(_) => None,
+                                                                                        };
+                                                                                        if let Some(lbl) = label_opt {
+                                                                                            app_label = lbl;
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    result.push((pkg, app_label));
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+#[cfg(not(target_os = "android"))]
+fn query_installed_apps(_app: &slint::android::AndroidApp) -> Vec<(String, String)> {
+    Vec::new()
+}
+
+fn populate_installed_apps_into_ui(win: &MainWindow, app: &slint::android::AndroidApp) {
+    let installed = query_installed_apps(app);
+    if installed.is_empty() { return; }
+    let all_model = win.get_all_apps_list();
+    let total = all_model.row_count();
+    let mut existing_pkgs = std::collections::HashSet::new();
+
+    let full_model = Rc::new(slint::VecModel::default());
+    for i in 0..total {
+        if let Some(item) = all_model.row_data(i) {
+            existing_pkgs.insert(item.pkg.to_string());
+            full_model.push(item);
+        }
+    }
+
+    let fallback_icon = if let Some(first) = all_model.row_data(0) {
+        first.icon
+    } else {
+        slint::Image::default()
+    };
+
+    for (pkg, label) in installed {
+        if !existing_pkgs.contains(&pkg) {
+            existing_pkgs.insert(pkg.clone());
+            let mut h: u32 = 0;
+            for b in pkg.bytes() { h = h.wrapping_mul(31).wrapping_add(b as u32); }
+            let r = ((h & 0xFF) % 180 + 75) as u8;
+            let g = (((h >> 8) & 0xFF) % 180 + 75) as u8;
+            let b = (((h >> 16) & 0xFF) % 180 + 75) as u8;
+            let brand_color = slint::Color::from_rgb_u8(r, g, b);
+
+            full_model.push(AppItem {
+                id: pkg.clone().into(),
+                name: label.into(),
+                pkg: pkg.into(),
+                icon: fallback_icon.clone(),
+                brand_color,
+                in_dock: false,
+            });
+        }
+    }
+
+    win.set_all_apps_list(full_model.into());
+}
+
+fn update_dock_and_all_apps(win: &MainWindow, s: &mut AppState) {
+    let all_model = win.get_all_apps_list();
+    let total = all_model.row_count();
+    let dock_model = Rc::new(slint::VecModel::default());
+
+    for i in 0..total {
+        if let Some(mut item) = all_model.row_data(i) {
+            item.in_dock = s.dock_indices.contains(&i);
+            all_model.set_row_data(i, item);
+        }
+    }
+
+    for &idx in &s.dock_indices {
+        if let Some(item) = all_model.row_data(idx) {
+            dock_model.push(item);
+        }
+    }
+    win.set_apps(dock_model.into());
+
+    if s.selected_app >= s.dock_indices.len() && !s.dock_indices.is_empty() {
+        s.selected_app = s.dock_indices.len() - 1;
     }
 }
 
@@ -662,20 +909,30 @@ fn android_main(app: slint::android::AndroidApp) {
     display4k::enforce_4k_surface(&app, main_window.window(), &display_info);
     let state = Rc::new(RefCell::new(AppState {
         active_zone: "apps",
-        selected_app: 3, // Default to Prime Video (matching reference screenshot)
+        selected_app: 3, // Default to Prime Video
         selected_input: 0,
         selected_util: 0,
         selected_setting: 0,
         selected_detail_option: 0,
         settings_open: false,
         settings_detail: false,
-        current_group: "background",
-        wallpaper_idx: 6, // Bridge at dusk (matching real TV webview)
-        blur_level: 2, // Default (radius 20)
-        refraction_level: 2, // Default (displacement 6.5px)
-        layout_mode: "Dock", // Dock default (matching real TV webview)
+        current_group: "appearance",
+        wallpaper_idx: 6, // Bridge at dusk
+        refraction: 1.00, // DEFAULT: 1.00 (liquid-rust demo exact default)
+        appearance_preset: "Clear", // DEFAULT: Clear (Apple kit Clear glass)
+        transparency: 0.00, // DEFAULT: 0.00 Clear
+        dark_mode: true,
+        increase_contrast: false,
+        reduce_motion: false,
+        reduce_transparency: false,
+        physics: true,
+        liquid_merge: true,
+        in_appearance_panel: false,
+        appearance_focus_index: 3, // Focus on Refraction Slider!
+        blur_level: 1,
+        layout_mode: "Dock",
         typography: "Manrope",
-        material: "Frost",
+        material: "Clear",
         focus_style: "Glass Plate",
         icon_pack: "CleanFrame default",
         art_mode: false,
@@ -684,8 +941,17 @@ fn android_main(app: slint::android::AndroidApp) {
         now_playing_title: "CleanFrame Ambient".to_string(),
         now_playing_artist: "The Frame Audio".to_string(),
         now_playing_playing: false,
+        all_apps_open: false,
+        selected_all_app: 0,
+        all_apps_action_open: false,
+        selected_all_app_action: 0,
+        dock_indices: vec![0, 1, 2, 3, 4, 5, 6, 7],
         frost_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+        focus_lens_cache: std::cell::RefCell::new(None),
     }));
+
+    populate_installed_apps_into_ui(&main_window, &app);
+    update_dock_and_all_apps(&main_window, &mut state.borrow_mut());
 
     main_window.set_clock_text("3:37".into());
     main_window.set_focused_caption("Prime Video".into());
@@ -694,6 +960,10 @@ fn android_main(app: slint::android::AndroidApp) {
     let (clean_frost, dock_frost) = state.borrow().get_frost_images(6);
     main_window.set_dynamic_frost_image(clean_frost);
     main_window.set_dock_frost_image(dock_frost);
+    let (dock_lens, list_lens, round_lens) = state.borrow().get_focus_lens_images();
+    main_window.set_focus_lens_image(dock_lens);
+    main_window.set_focus_list_lens_image(list_lens);
+    main_window.set_round_focus_lens_image(round_lens);
     main_window.set_current_layout("Dock".into());
     main_window.set_now_playing_visible(false);
 
@@ -747,8 +1017,26 @@ fn android_main(app: slint::android::AndroidApp) {
             let mut s = state_clone.borrow_mut();
             if s.art_mode {
                 s.art_mode = false;
+            } else if s.all_apps_open {
+                if s.all_apps_action_open {
+                    if s.selected_all_app_action > 0 {
+                        s.selected_all_app_action -= 1;
+                    }
+                } else if s.selected_all_app >= 4 {
+                    s.selected_all_app -= 4;
+                }
             } else if s.settings_open {
-                if s.settings_detail {
+                if s.in_appearance_panel {
+                    if (8..=10).contains(&s.appearance_focus_index) {
+                        s.appearance_focus_index -= 3;
+                    } else if (5..=7).contains(&s.appearance_focus_index) {
+                        s.appearance_focus_index = 4;
+                    } else if s.appearance_focus_index == 4 {
+                        s.appearance_focus_index = 3;
+                    } else if s.appearance_focus_index == 3 {
+                        s.appearance_focus_index = match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 };
+                    }
+                } else if s.settings_detail {
                     if s.selected_detail_option > -1 {
                         s.selected_detail_option -= 1;
                     }
@@ -799,15 +1087,34 @@ fn android_main(app: slint::android::AndroidApp) {
         let state_clone = state.clone();
         main_window.on_key_down(move || {
             let mut s = state_clone.borrow_mut();
+            let total_all_apps = window_weak.upgrade().map(|w| w.get_all_apps_list().row_count()).unwrap_or(16);
             if s.art_mode {
                 s.art_mode = false;
+            } else if s.all_apps_open {
+                if s.all_apps_action_open {
+                    if s.selected_all_app_action < 1 {
+                        s.selected_all_app_action += 1;
+                    }
+                } else if s.selected_all_app + 4 < total_all_apps {
+                    s.selected_all_app += 4;
+                }
             } else if s.settings_open {
-                if s.settings_detail {
+                if s.in_appearance_panel {
+                    if (0..=2).contains(&s.appearance_focus_index) {
+                        s.appearance_focus_index = 3;
+                    } else if s.appearance_focus_index == 3 {
+                        s.appearance_focus_index = 4;
+                    } else if s.appearance_focus_index == 4 {
+                        s.appearance_focus_index = 5;
+                    } else if (5..=7).contains(&s.appearance_focus_index) {
+                        s.appearance_focus_index += 3;
+                    }
+                } else if s.settings_detail {
                     let max_opt = get_detail_options_len(s.current_group) as i32 - 1;
                     if s.selected_detail_option < max_opt {
                         s.selected_detail_option += 1;
                     }
-                } else if s.selected_setting < 11 {
+                } else if s.selected_setting < 12 {
                     s.selected_setting += 1;
                 }
             } else if s.layout_mode == "Dock" {
@@ -857,8 +1164,45 @@ fn android_main(app: slint::android::AndroidApp) {
             if s.art_mode {
                 s.wallpaper_idx = (s.wallpaper_idx + WALLPAPERS.len() - 1) % WALLPAPERS.len();
                 s.art_saved_notice = false;
+            } else if s.all_apps_open {
+                if !s.all_apps_action_open && s.selected_all_app > 0 && s.selected_all_app % 4 > 0 {
+                    s.selected_all_app -= 1;
+                }
             } else if s.settings_open {
-                if s.settings_detail {
+                if s.in_appearance_panel {
+                    if s.appearance_focus_index == 3 {
+                        s.refraction = (s.refraction - 0.05).max(0.0);
+                        s.frost_cache.borrow_mut().clear();
+                        s.focus_lens_cache.borrow_mut().take();
+                    } else if s.appearance_focus_index == 4 {
+                        s.transparency = (s.transparency - 0.05).max(0.0);
+                        s.frost_cache.borrow_mut().clear();
+                        s.focus_lens_cache.borrow_mut().take();
+                    } else if (0..=2).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index > 0 {
+                            s.appearance_focus_index -= 1;
+                            s.appearance_preset = match s.appearance_focus_index { 1 => "Regular", _ => "Clear" };
+                            s.material = s.appearance_preset;
+                            s.transparency = if s.appearance_preset == "Clear" { 0.0 } else { 0.5 };
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        } else {
+                            s.in_appearance_panel = false;
+                        }
+                    } else if (5..=7).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index > 5 {
+                            s.appearance_focus_index -= 1;
+                        } else {
+                            s.in_appearance_panel = false;
+                        }
+                    } else if (8..=10).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index > 8 {
+                            s.appearance_focus_index -= 1;
+                        } else {
+                            s.in_appearance_panel = false;
+                        }
+                    }
+                } else if s.settings_detail {
                     s.settings_detail = false;
                 } else {
                     s.settings_open = false;
@@ -901,16 +1245,58 @@ fn android_main(app: slint::android::AndroidApp) {
         let state_clone = state.clone();
         main_window.on_key_right(move || {
             let mut s = state_clone.borrow_mut();
+            let total_all_apps = window_weak.upgrade().map(|w| w.get_all_apps_list().row_count()).unwrap_or(16);
             if s.art_mode {
                 s.wallpaper_idx = (s.wallpaper_idx + 1) % WALLPAPERS.len();
                 s.art_saved_notice = false;
+            } else if s.all_apps_open {
+                if !s.all_apps_action_open && s.selected_all_app + 1 < total_all_apps && s.selected_all_app % 4 < 3 {
+                    s.selected_all_app += 1;
+                }
             } else if s.settings_open {
-                if !s.settings_detail {
-                    open_settings_detail(&mut s);
+                if s.in_appearance_panel {
+                    if s.appearance_focus_index == 3 {
+                        s.refraction = (s.refraction + 0.05).min(1.0);
+                        s.frost_cache.borrow_mut().clear();
+                        s.focus_lens_cache.borrow_mut().take();
+                    } else if s.appearance_focus_index == 4 {
+                        s.transparency = (s.transparency + 0.05).min(1.0);
+                        s.frost_cache.borrow_mut().clear();
+                        s.focus_lens_cache.borrow_mut().take();
+                    } else if (0..=2).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index < 2 {
+                            s.appearance_focus_index += 1;
+                            s.appearance_preset = match s.appearance_focus_index { 1 => "Regular", _ => "Tinted" };
+                            s.material = s.appearance_preset;
+                            s.transparency = if s.appearance_preset == "Tinted" { 0.85 } else { 0.5 };
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                    } else if (5..=7).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index < 7 {
+                            s.appearance_focus_index += 1;
+                        }
+                    } else if (8..=10).contains(&s.appearance_focus_index) {
+                        if s.appearance_focus_index < 10 {
+                            s.appearance_focus_index += 1;
+                        }
+                    }
+                } else if !s.settings_detail {
+                    if s.selected_setting <= 3 {
+                        s.in_appearance_panel = true;
+                        s.appearance_focus_index = match s.selected_setting {
+                            0 => match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 },
+                            1 => 3,
+                            2 => 4,
+                            _ => 5,
+                        };
+                    } else {
+                        open_settings_detail(&mut s);
+                    }
                 }
             } else if s.layout_mode == "Dock" {
                 if s.active_zone == "apps" {
-                    if s.selected_app < 7 {
+                    if s.selected_app + 1 < s.dock_indices.len() {
                         s.selected_app += 1;
                     }
                 } else if s.active_zone == "inputs" {
@@ -958,24 +1344,126 @@ fn android_main(app: slint::android::AndroidApp) {
             if s.art_mode {
                 // Save current artwork as permanent home wallpaper!
                 s.art_saved_notice = true;
+            } else if s.all_apps_open {
+                if s.all_apps_action_open {
+                    if s.selected_all_app_action == 0 {
+                        // Launch app
+                        if let Some(win) = window_weak.upgrade() {
+                            let catalog = win.get_all_apps_list();
+                            if let Some(item) = catalog.row_data(s.selected_all_app) {
+                                s.all_apps_open = false;
+                                s.all_apps_action_open = false;
+                                if item.pkg == "android.settings.SETTINGS" || item.pkg == "settings" {
+                                    s.settings_open = true;
+                                    s.settings_detail = false;
+                                    s.in_appearance_panel = false;
+                                    s.selected_setting = 0;
+                                } else {
+                                    launch_package(&app_ref, item.pkg.as_str());
+                                }
+                            }
+                        }
+                    } else {
+                        // Toggle Dock (Pin / Unpin)
+                        let app_idx = s.selected_all_app;
+                        if let Some(pos) = s.dock_indices.iter().position(|&x| x == app_idx) {
+                            if s.dock_indices.len() > 1 {
+                                s.dock_indices.remove(pos);
+                                if s.selected_app >= s.dock_indices.len() {
+                                    s.selected_app = s.dock_indices.len().saturating_sub(1);
+                                }
+                            }
+                        } else {
+                            s.dock_indices.push(app_idx);
+                        }
+                        if let Some(win) = window_weak.upgrade() {
+                            update_dock_and_all_apps(&win, &mut s);
+                        }
+                        s.all_apps_action_open = false;
+                    }
+                } else {
+                    // Open Action Modal for currently focused app
+                    s.all_apps_action_open = true;
+                    s.selected_all_app_action = 0;
+                }
             } else if s.settings_open {
-                if s.settings_detail {
+                if s.in_appearance_panel {
+                    match s.appearance_focus_index {
+                        0 => {
+                            s.appearance_preset = "Clear";
+                            s.material = "Clear";
+                            s.transparency = 0.0;
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                        1 => {
+                            s.appearance_preset = "Regular";
+                            s.material = "Regular";
+                            s.transparency = 0.5;
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                        2 => {
+                            s.appearance_preset = "Tinted";
+                            s.material = "Tinted";
+                            s.transparency = 0.85;
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                        5 => {
+                            s.dark_mode = !s.dark_mode;
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                        6 => {
+                            s.increase_contrast = !s.increase_contrast;
+                        }
+                        7 => {
+                            s.reduce_motion = !s.reduce_motion;
+                        }
+                        8 => {
+                            s.reduce_transparency = !s.reduce_transparency;
+                            s.frost_cache.borrow_mut().clear();
+                            s.focus_lens_cache.borrow_mut().take();
+                        }
+                        9 => {
+                            s.physics = !s.physics;
+                        }
+                        10 => {
+                            s.liquid_merge = !s.liquid_merge;
+                        }
+                        _ => {}
+                    }
+                } else if s.settings_detail {
                     if s.selected_detail_option == -1 {
                         s.settings_detail = false;
                     } else {
                         apply_detail_choice(&mut s, &app_ref);
                     }
+                } else if s.selected_setting <= 3 {
+                    s.in_appearance_panel = true;
+                    s.appearance_focus_index = match s.selected_setting {
+                        0 => match s.appearance_preset { "Regular" => 1, "Tinted" => 2, _ => 0 },
+                        1 => 3,
+                        2 => 4,
+                        _ => 5,
+                    };
                 } else {
                     open_settings_detail(&mut s);
                 }
             } else if s.active_zone == "apps" {
-                if s.selected_app == 7 {
-                    s.settings_open = true;
-                    s.settings_detail = false;
-                    s.selected_setting = 0;
-                } else if s.selected_app < APP_PACKAGES.len() {
-                    let pkg = APP_PACKAGES[s.selected_app];
-                    launch_package(&app_ref, pkg);
+                if let Some(win) = window_weak.upgrade() {
+                    let apps = win.get_apps();
+                    if let Some(item) = apps.row_data(s.selected_app) {
+                        if item.pkg == "android.settings.SETTINGS" || item.pkg == "settings" || item.id == "settings" {
+                            s.settings_open = true;
+                            s.settings_detail = false;
+                            s.in_appearance_panel = false;
+                            s.selected_setting = 0;
+                        } else {
+                            launch_package(&app_ref, item.pkg.as_str());
+                        }
+                    }
                 }
             } else if s.active_zone == "inputs" {
                 let input_id = HDMI_IDS[s.selected_input];
@@ -988,8 +1476,10 @@ fn android_main(app: slint::android::AndroidApp) {
                         s.art_saved_notice = false;
                     }
                     1 => {
-                        // All apps: Open app store / catalog
-                        launch_package(&app_ref, "com.aurora.store");
+                        // All apps: Open All Applications Studio!
+                        s.all_apps_open = true;
+                        s.selected_all_app = 0;
+                        s.all_apps_action_open = false;
                     }
                     2 => {
                         // Inputs: Focus inputs shelf
@@ -1000,6 +1490,7 @@ fn android_main(app: slint::android::AndroidApp) {
                         // Settings: Open settings overview
                         s.settings_open = true;
                         s.settings_detail = false;
+                        s.in_appearance_panel = false;
                         s.selected_setting = 0;
                     }
                     _ => {}
@@ -1021,8 +1512,16 @@ fn android_main(app: slint::android::AndroidApp) {
             let mut s = state_clone.borrow_mut();
             if s.art_mode {
                 s.art_mode = false;
+            } else if s.all_apps_open {
+                if s.all_apps_action_open {
+                    s.all_apps_action_open = false;
+                } else {
+                    s.all_apps_open = false;
+                }
             } else if s.settings_open {
-                if s.settings_detail {
+                if s.in_appearance_panel {
+                    s.in_appearance_panel = false;
+                } else if s.settings_detail {
                     s.settings_detail = false;
                 } else {
                     s.settings_open = false;
@@ -1030,6 +1529,87 @@ fn android_main(app: slint::android::AndroidApp) {
             } else if s.active_zone != "apps" {
                 s.active_zone = "apps";
             }
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // Set Refraction directly (from touch / pointer or slider)
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_set_refraction(move |val| {
+            let mut s = state_clone.borrow_mut();
+            s.refraction = val.clamp(0.0, 1.0);
+            s.frost_cache.borrow_mut().clear();
+            s.focus_lens_cache.borrow_mut().take();
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // Set Transparency directly
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_set_transparency(move |val| {
+            let mut s = state_clone.borrow_mut();
+            s.transparency = val.clamp(0.0, 1.0);
+            s.frost_cache.borrow_mut().clear();
+            s.focus_lens_cache.borrow_mut().take();
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // Set Appearance Preset directly
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_set_appearance_preset(move |preset| {
+            let mut s = state_clone.borrow_mut();
+            let p_str = preset.as_str();
+            s.appearance_preset = match p_str {
+                "Regular" => "Regular",
+                "Tinted" => "Tinted",
+                _ => "Clear",
+            };
+            s.material = s.appearance_preset;
+            if s.appearance_preset == "Clear" {
+                s.transparency = 0.0;
+            } else if s.appearance_preset == "Regular" {
+                s.transparency = 0.5;
+            } else {
+                s.transparency = 0.85;
+            }
+            s.frost_cache.borrow_mut().clear();
+            s.focus_lens_cache.borrow_mut().take();
+            if let Some(win) = window_weak.upgrade() {
+                sync_ui(&win, &s);
+            }
+        });
+    }
+
+    // Toggle Chip directly
+    {
+        let window_weak = main_window.as_weak();
+        let state_clone = state.clone();
+        main_window.on_toggle_chip(move |chip| {
+            let mut s = state_clone.borrow_mut();
+            match chip.as_str() {
+                "dark" => s.dark_mode = !s.dark_mode,
+                "contrast" => s.increase_contrast = !s.increase_contrast,
+                "reduce_motion" => s.reduce_motion = !s.reduce_motion,
+                "reduce_transparency" => s.reduce_transparency = !s.reduce_transparency,
+                "physics" => s.physics = !s.physics,
+                "liquid_merge" => s.liquid_merge = !s.liquid_merge,
+                _ => {}
+            }
+            s.frost_cache.borrow_mut().clear();
+            s.focus_lens_cache.borrow_mut().take();
             if let Some(win) = window_weak.upgrade() {
                 sync_ui(&win, &s);
             }
@@ -1048,23 +1628,27 @@ fn android_main(app: slint::android::AndroidApp) {
 fn open_settings_detail(s: &mut AppState) {
     s.settings_detail = true;
     match s.selected_setting {
-        0 => {
+        4 => {
             s.current_group = "background";
             s.selected_detail_option = s.wallpaper_idx as i32;
         }
-        1 => {
+        5 => {
             s.current_group = "layout";
             s.selected_detail_option = if s.layout_mode == "List" { 0 } else { 1 };
         }
-        2 => {
+        6 => {
             s.current_group = "blur";
             s.selected_detail_option = s.blur_level as i32;
         }
-        3 => {
-            s.current_group = "refraction";
-            s.selected_detail_option = s.refraction_level as i32;
+        7 => {
+            s.current_group = "focus";
+            s.selected_detail_option = match s.focus_style {
+                "Round" => 1,
+                "Minimal Type" => 2,
+                _ => 0,
+            };
         }
-        4 => {
+        8 => {
             s.current_group = "typography";
             s.selected_detail_option = match s.typography {
                 "Manrope" => 0,
@@ -1072,32 +1656,19 @@ fn open_settings_detail(s: &mut AppState) {
                 _ => 2,
             };
         }
-        5 => {
+        9 => {
             s.current_group = "icons";
             s.selected_detail_option = if s.icon_pack == "CleanFrame default" { 0 } else { 1 };
         }
-        6 => {
-            s.current_group = "focus";
-            s.selected_detail_option = if s.focus_style == "Minimal Type" { 1 } else { 0 };
-        }
-        7 => {
-            s.current_group = "material";
-            s.selected_detail_option = match s.material {
-                "Frost" => 0,
-                "Soft" => 1,
-                "Obsidian Tint" => 2,
-                _ => 3, // "Clear"
-            };
-        }
-        8 => {
+        10 => {
             s.current_group = "inputs";
             s.selected_detail_option = 0;
         }
-        9 => {
+        11 => {
             s.current_group = "editor";
             s.selected_detail_option = 0;
         }
-        10 => {
+        12 => {
             s.current_group = "samsung";
             s.selected_detail_option = 0;
         }
@@ -1113,10 +1684,9 @@ fn get_detail_options_len(group: &str) -> usize {
         "background" => WALLPAPERS.len(),
         "layout" => 2,
         "blur" => BLUR_LEVEL_NAMES.len(),
-        "refraction" => REFRACTION_LEVEL_NAMES.len(),
+        "focus" => 3,
         "typography" => 3,
         "icons" => 2,
-        "focus" => 2,
         "material" => 4,
         "inputs" => 4,
         "editor" => 1,
@@ -1141,12 +1711,6 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
                 s.frost_cache.borrow_mut().clear();
             }
         }
-        "refraction" => {
-            if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < REFRACTION_LEVEL_NAMES.len() {
-                s.refraction_level = s.selected_detail_option as usize;
-                s.frost_cache.borrow_mut().clear();
-            }
-        }
         "typography" => {
             s.typography = match s.selected_detail_option {
                 0 => "Manrope",
@@ -1158,7 +1722,11 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
             s.icon_pack = if s.selected_detail_option == 0 { "CleanFrame default" } else { "Full Color" };
         }
         "focus" => {
-            s.focus_style = if s.selected_detail_option == 0 { "Glass Plate" } else { "Minimal Type" };
+            s.focus_style = match s.selected_detail_option {
+                1 => "Round",
+                2 => "Minimal Type",
+                _ => "Glass Plate",
+            };
         }
         "material" => {
             s.material = match s.selected_detail_option {
@@ -1167,6 +1735,7 @@ fn apply_detail_choice(s: &mut AppState, app: &slint::android::AndroidApp) {
                 2 => "Obsidian Tint",
                 _ => "Clear",
             };
+            s.focus_lens_cache.borrow_mut().take();
         }
         "inputs" => {
             if s.selected_detail_option >= 0 && (s.selected_detail_option as usize) < HDMI_IDS.len() {
@@ -1201,12 +1770,44 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     let (clean_frost, dock_frost) = s.get_frost_images(s.wallpaper_idx);
     win.set_dynamic_frost_image(clean_frost);
     win.set_dock_frost_image(dock_frost);
+    let (dock_lens, list_lens, round_lens) = s.get_focus_lens_images();
+    win.set_focus_lens_image(dock_lens);
+    win.set_focus_list_lens_image(list_lens);
+    win.set_round_focus_lens_image(round_lens);
     win.set_current_layout(s.layout_mode.into());
     win.set_current_font(s.typography.into());
     win.set_current_material(s.material.into());
     win.set_current_focus_style(s.focus_style.into());
     win.set_current_icon_pack(s.icon_pack.into());
     win.set_now_playing_visible(s.now_playing_visible);
+
+    // Liquid Glass Refraction & Appearance Controls
+    win.set_refraction_value(s.refraction);
+    win.set_refraction_display(format!("{:.2}", s.refraction).into());
+    win.set_refraction_subcaption(format!("Material {{ refraction: {:.2}, depth: {:.1}pt, η: 1.50 }}", s.refraction, 12.0 + 40.0 * s.refraction).into());
+    win.set_appearance_preset(s.appearance_preset.into());
+    win.set_transparency_value(s.transparency);
+    win.set_transparency_display(if s.appearance_preset == "Clear" {
+        "Clear".into()
+    } else if s.appearance_preset == "Tinted" {
+        "Tinted".into()
+    } else {
+        format!("{:.2}", s.transparency).into()
+    });
+    win.set_opt_dark(s.dark_mode);
+    win.set_opt_contrast(s.increase_contrast);
+    win.set_opt_reduce_motion(s.reduce_motion);
+    win.set_opt_reduce_transparency(s.reduce_transparency);
+    win.set_opt_physics(s.physics);
+    win.set_opt_liquid_merge(s.liquid_merge);
+    win.set_in_appearance_panel(s.in_appearance_panel);
+    win.set_appearance_focus_index(s.appearance_focus_index);
+
+    // All Apps Studio State
+    win.set_all_apps_open(s.all_apps_open);
+    win.set_selected_all_app(s.selected_all_app as i32);
+    win.set_all_apps_action_open(s.all_apps_action_open);
+    win.set_selected_all_app_action(s.selected_all_app_action as i32);
 
     // Art Mode sync
     win.set_art_mode(s.art_mode);
@@ -1218,8 +1819,18 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     win.set_art_saved_notice(s.art_saved_notice);
 
     // Caption under clock reflecting current focused item
+    let app_name_holder: String;
     let caption_text = match s.active_zone {
-        "apps" => APP_NAMES[s.selected_app.min(APP_NAMES.len() - 1)],
+        "apps" => {
+            if let Some(item) = win.get_apps().row_data(s.selected_app) {
+                app_name_holder = item.name.to_string();
+                app_name_holder.as_str()
+            } else if s.selected_app < APP_NAMES.len() {
+                APP_NAMES[s.selected_app]
+            } else {
+                ""
+            }
+        }
         "inputs" => HDMI_LABELS[s.selected_input.min(HDMI_LABELS.len() - 1)],
         "util" => UTIL_LABELS[s.selected_util.min(UTIL_LABELS.len() - 1)],
         "media" => &s.now_playing_title,
@@ -1227,53 +1838,66 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
     };
     win.set_focused_caption(caption_text.into());
 
-    // Update settings overview readout values (11 rows)
+    // Update settings overview readout values (13 rows)
     let settings = win.get_settings_list();
     if let Some(mut r) = settings.row_data(0) {
-        if s.wallpaper_idx < WALLPAPERS.len() {
-            r.value = WALLPAPERS[s.wallpaper_idx].name.into();
-        }
+        r.value = format!("{} · Pure Glass", s.appearance_preset).into();
         settings.set_row_data(0, r);
     }
     if let Some(mut r) = settings.row_data(1) {
-        r.value = s.layout_mode.into();
+        r.value = format!("{:.2} · Snell Bevel", s.refraction).into();
         settings.set_row_data(1, r);
     }
     if let Some(mut r) = settings.row_data(2) {
-        r.value = BLUR_LEVEL_NAMES[s.blur_level.min(BLUR_LEVEL_NAMES.len() - 1)].into();
+        r.value = format!("{:.2} · {}", s.transparency, if s.transparency == 0.0 { "Clear" } else { "Tinted" }).into();
         settings.set_row_data(2, r);
     }
     if let Some(mut r) = settings.row_data(3) {
-        r.value = REFRACTION_LEVEL_NAMES[s.refraction_level.min(REFRACTION_LEVEL_NAMES.len() - 1)].into();
+        let mut v = Vec::new();
+        if s.physics { v.push("Physics"); }
+        if s.liquid_merge { v.push("Liquid"); }
+        if s.dark_mode { v.push("Dark"); }
+        let desc = if v.is_empty() { "Standard".to_string() } else { v.join(" · ") };
+        r.value = desc.into();
         settings.set_row_data(3, r);
     }
     if let Some(mut r) = settings.row_data(4) {
-        r.value = s.typography.into();
+        if s.wallpaper_idx < WALLPAPERS.len() {
+            r.value = WALLPAPERS[s.wallpaper_idx].name.into();
+        }
         settings.set_row_data(4, r);
     }
     if let Some(mut r) = settings.row_data(5) {
-        r.value = s.icon_pack.into();
+        r.value = s.layout_mode.into();
         settings.set_row_data(5, r);
     }
     if let Some(mut r) = settings.row_data(6) {
-        r.value = s.focus_style.into();
+        r.value = BLUR_LEVEL_NAMES[s.blur_level.min(BLUR_LEVEL_NAMES.len() - 1)].into();
         settings.set_row_data(6, r);
     }
     if let Some(mut r) = settings.row_data(7) {
-        r.value = s.material.into();
+        r.value = s.focus_style.into();
         settings.set_row_data(7, r);
     }
     if let Some(mut r) = settings.row_data(8) {
-        r.value = "Device dependent".into();
+        r.value = s.typography.into();
         settings.set_row_data(8, r);
     }
     if let Some(mut r) = settings.row_data(9) {
-        r.value = "8 apps".into();
+        r.value = s.icon_pack.into();
         settings.set_row_data(9, r);
     }
     if let Some(mut r) = settings.row_data(10) {
-        r.value = "Home and TV settings".into();
+        r.value = "Device dependent".into();
         settings.set_row_data(10, r);
+    }
+    if let Some(mut r) = settings.row_data(11) {
+        r.value = "8 apps".into();
+        settings.set_row_data(11, r);
+    }
+    if let Some(mut r) = settings.row_data(12) {
+        r.value = "Home and TV settings".into();
+        settings.set_row_data(12, r);
     }
 
     // Update Detail Submenu Options
@@ -1321,20 +1945,6 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                         title: name.into(),
                         desc: BLUR_LEVEL_DESCS[idx].into(),
                         active: s.blur_level == idx,
-                    });
-                }
-                win.set_detail_options(list.into());
-            }
-            "refraction" => {
-                win.set_detail_title("Glass Edge Refraction".into());
-                win.set_detail_desc("Control Snell's law optical bending and chromatic dispersion along beveled rim.".into());
-                let list = Rc::new(VecModel::default());
-                for (idx, &name) in REFRACTION_LEVEL_NAMES.iter().enumerate() {
-                    list.push(DetailOption {
-                        id: name.to_lowercase().into(),
-                        title: name.into(),
-                        desc: REFRACTION_LEVEL_DESCS[idx].into(),
-                        active: s.refraction_level == idx,
                     });
                 }
                 win.set_detail_options(list.into());
@@ -1390,6 +2000,12 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                     title: "Glass Plate".into(),
                     desc: "Luminous floating liquid glass plate with specular rim behind focused item".into(),
                     active: s.focus_style == "Glass Plate",
+                });
+                list.push(DetailOption {
+                    id: "round".into(),
+                    title: "Round".into(),
+                    desc: "Circular liquid glass lens orb with 360° radial Snell refraction and dome specular glint".into(),
+                    active: s.focus_style == "Round",
                 });
                 list.push(DetailOption {
                     id: "minimal_type".into(),
