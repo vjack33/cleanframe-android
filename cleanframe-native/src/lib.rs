@@ -1644,7 +1644,11 @@ fn android_main(app: slint::android::AndroidApp) {
                         if s.selected_detail_option == 0 {
                             s.current_group = "background";
                             s.selected_detail_option = s.wallpaper_idx as i32;
-                            s.detail_back_text = "‹ Wallpaper & Typography";
+                            s.detail_back_text = "‹ Wallpaper, Icons & Typography";
+                        } else if s.selected_detail_option == 1 {
+                            s.current_group = "icons";
+                            s.selected_detail_option = 0;
+                            s.detail_back_text = "‹ Wallpaper, Icons & Typography";
                         } else {
                             s.typography = match s.typography {
                                 "Manrope" => "Newsreader",
@@ -2170,9 +2174,15 @@ fn handle_settings_back(s: &mut AppState) {
             s.detail_back_text = "‹ Settings";
         }
         "icons" => {
-            s.current_group = "dock_settings";
-            s.selected_detail_option = 3;
-            s.detail_back_text = "‹ Dock & Navigation";
+            if s.detail_back_text.contains("Wallpaper") {
+                s.current_group = "wallpaper_type";
+                s.selected_detail_option = 1;
+                s.detail_back_text = "‹ Settings";
+            } else {
+                s.current_group = "dock_settings";
+                s.selected_detail_option = 3;
+                s.detail_back_text = "‹ Dock & Navigation";
+            }
         }
         "background" | "typography" => {
             s.current_group = "wallpaper_type";
@@ -2222,7 +2232,7 @@ fn get_detail_options_len(s: &AppState) -> usize {
         "dock_nav" => 2,
         "focus_item" => 4,
         "dock_settings" => 4,
-        "wallpaper_type" => 2,
+        "wallpaper_type" => 3,
         "visual_effects" => 6,
         "system_inputs" => 3,
         "background" => WALLPAPERS.len(),
@@ -2337,7 +2347,11 @@ fn handle_detail_ok(win: &MainWindow, s: &mut AppState, app: &slint::android::An
             if s.selected_detail_option == 0 {
                 s.current_group = "background";
                 s.selected_detail_option = s.wallpaper_idx as i32;
-                s.detail_back_text = "‹ Wallpaper & Typography";
+                s.detail_back_text = "‹ Wallpaper, Icons & Typography";
+            } else if s.selected_detail_option == 1 {
+                s.current_group = "icons";
+                s.selected_detail_option = 0;
+                s.detail_back_text = "‹ Wallpaper, Icons & Typography";
             } else {
                 s.typography = match s.typography {
                     "Manrope" => "Newsreader",
@@ -2631,14 +2645,20 @@ fn sync_ui(win: &MainWindow, s: &AppState) {
                 win.set_detail_options(list.into());
             }
             "wallpaper_type" => {
-                win.set_detail_title("Wallpaper & Typography".into());
-                win.set_detail_desc("Select curated photographic landscapes or fine system typography.".into());
+                win.set_detail_title("Wallpaper, Icons & Typography".into());
+                win.set_detail_desc("Select curated photographic landscapes, icon packs, or fine typography.".into());
                 let list = Rc::new(VecModel::default());
                 let wp_name = if s.wallpaper_idx < WALLPAPERS.len() { WALLPAPERS[s.wallpaper_idx].name } else { "Photo" };
                 list.push(DetailOption {
                     id: "nav_bg".into(),
                     title: format!("Background Wallpaper: {}", wp_name).into(),
                     desc: "15 curated photographic landscapes and fine art galleries (OK to open)".into(),
+                    active: true,
+                });
+                list.push(DetailOption {
+                    id: "nav_icons".into(),
+                    title: format!("Icon Pack: {}", s.icon_pack).into(),
+                    desc: "CleanFrame default · Full Color · System · Installed Theme Packs (OK to open)".into(),
                     active: true,
                 });
                 list.push(DetailOption {
