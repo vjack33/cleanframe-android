@@ -150,6 +150,7 @@ pub struct AppState {
     pub focus_style: &'static str,
     pub icon_pack: String,
     pub installed_icon_packs: Vec<(String, String)>,
+    pub icon_pack_mappings: std::cell::RefCell<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
     pub stock_vector_icons: std::collections::HashMap<String, slint::Image>,
     pub app_icon_cache: std::cell::RefCell<std::collections::HashMap<String, slint::Image>>,
     pub art_mode: bool,
@@ -428,9 +429,15 @@ fn query_installed_icon_packs(app: &slint::android::AndroidApp) -> Vec<(String, 
         let actions = [
             "org.adw.launcher.THEMES",
             "com.novalauncher.THEME",
-            "com.gau.go.launcherex.theme",
             "com.teslacoilsw.launcher.THEME",
+            "com.anddoes.launcher.THEME",
+            "com.gau.go.launcherex.theme",
             "com.fede.launcher.THEME_ICONPACK",
+            "com.dlto.atom.launcher.THEME",
+            "ginlemon.smartlauncher.THEMES",
+            "com.sonymobile.home.ICON_PACK",
+            "app.lawnchair.icons.THEME",
+            "ch.deletescape.lawnchair.ICONPACK",
         ];
 
         for action in actions {
@@ -502,8 +509,258 @@ fn query_installed_icon_packs(_app: &slint::android::AndroidApp) -> Vec<(String,
     ]
 }
 
+fn extract_xml_attr(part: &str, attr: &str) -> Option<String> {
+    for quote in ['"', '\''] {
+        let pattern_space = format!("{} = {}", attr, quote);
+        let pattern = format!("{}={}", attr, quote);
+        let start = if let Some(idx) = part.find(&pattern) {
+            Some(idx + pattern.len())
+        } else if let Some(idx) = part.find(&pattern_space) {
+            Some(idx + pattern_space.len())
+        } else {
+            None
+        };
+        if let Some(s) = start {
+            let rest = &part[s..];
+            if let Some(end) = rest.find(quote) {
+                return Some(rest[..end].to_string());
+            }
+        }
+    }
+    None
+}
+
+fn parse_appfilter_xml_str(text: &str, map: &mut std::collections::HashMap<String, String>) {
+    for part in text.split('<') {
+        if part.starts_with("item ") {
+            let comp_opt = extract_xml_attr(part, "component");
+            let draw_opt = extract_xml_attr(part, "drawable");
+            if let (Some(comp_raw), Some(draw)) = (comp_opt, draw_opt) {
+                let mut comp = comp_raw.trim();
+                if comp.starts_with("ComponentInfo{") && comp.ends_with('}') {
+                    comp = &comp[14..comp.len() - 1];
+                }
+                let comp_clean = comp.trim().to_lowercase();
+                if let Some((pkg, _act)) = comp_clean.split_once('/') {
+                    map.insert(comp_clean.clone(), draw.clone());
+                    map.entry(pkg.to_string()).or_insert_with(|| draw.clone());
+                } else {
+                    map.insert(comp_clean, draw);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(target_os = "android")]
-fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pkg: Option<&str>) -> Option<slint::Image> {
+fn parse_xml_resource_parser(
+    env: &mut jni::JNIEnv,
+    parser: &jni::objects::JObject,
+    map: &mut std::collections::HashMap<String, String>,
+) {
+    loop {
+        let event_val = match env.call_method(parser, "next", "()I", &[]) {
+            Ok(v) => v.i().unwrap_or(1),
+            Err(_) => break,
+        };
+        // 1 == END_DOCUMENT
+        if event_val == 1 { break; }
+        // 2 == START_TAG
+        if event_val == 2 {
+            if let Ok(name_val) = env.call_method(parser, "getName", "()Ljava/lang/String;", &[]) {
+                if let Ok(name_obj) = name_val.l() {
+                    let jname = jni::objects::JString::from(name_obj);
+                    let tag_name = env.get_string(&jname).map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                    if tag_name == "item" {
+                        let count_val = env.call_method(parser, "getAttributeCount", "()I", &[]);
+                        let count = count_val.map(|v| v.i().unwrap_or(0)).unwrap_or(0);
+                        let mut comp_opt: Option<String> = None;
+                        let mut draw_opt: Option<String> = None;
+                        for i in 0..count {
+                            if let Ok(name_val) = env.call_method(parser, "getAttributeName", "(I)Ljava/lang/String;", &[i.into()]) {
+                                if let Ok(name_obj) = name_val.l() {
+                                    if !name_obj.as_raw().is_null() {
+                                        let attr_str = {
+                                            let jn = jni::objects::JString::from(name_obj);
+                                            env.get_string(&jn).map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+                                        };
+                                        if attr_str == "component" {
+                                            if let Ok(v_val) = env.call_method(parser, "getAttributeValue", "(I)Ljava/lang/String;", &[i.into()]) {
+                                                if let Ok(v_obj) = v_val.l() {
+                                                    if !v_obj.as_raw().is_null() {
+                                                        let jv = jni::objects::JString::from(v_obj);
+                                                        comp_opt = env.get_string(&jv).map(|s| s.to_string_lossy().to_string()).ok();
+                                                    }
+                                                }
+                                            }
+                                        } else if attr_str == "drawable" {
+                                            if let Ok(v_val) = env.call_method(parser, "getAttributeValue", "(I)Ljava/lang/String;", &[i.into()]) {
+                                                if let Ok(v_obj) = v_val.l() {
+                                                    if !v_obj.as_raw().is_null() {
+                                                        let jv = jni::objects::JString::from(v_obj);
+                                                        draw_opt = env.get_string(&jv).map(|s| s.to_string_lossy().to_string()).ok();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let (Some(comp_raw), Some(draw)) = (comp_opt, draw_opt) {
+                            let mut comp = comp_raw.trim();
+                            if comp.starts_with("ComponentInfo{") && comp.ends_with('}') {
+                                comp = &comp[14..comp.len() - 1];
+                            }
+                            let comp_clean = comp.trim().to_lowercase();
+                            if let Some((pkg, _act)) = comp_clean.split_once('/') {
+                                map.insert(comp_clean.clone(), draw.clone());
+                                map.entry(pkg.to_string()).or_insert_with(|| draw.clone());
+                            } else {
+                                map.insert(comp_clean, draw);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn load_icon_pack_appfilter(app: &slint::android::AndroidApp, pack_pkg: &str) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    unsafe {
+        let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
+        if vm_ptr.is_null() { return map; }
+        let vm = match jni::JavaVM::from_raw(vm_ptr) {
+            Ok(v) => v,
+            Err(_) => return map,
+        };
+        let mut env = match vm.attach_current_thread() {
+            Ok(e) => e,
+            Err(_) => return map,
+        };
+        let activity = jni::objects::JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject);
+
+        let pack_jstr = match env.new_string(pack_pkg) {
+            Ok(s) => s,
+            Err(_) => return map,
+        };
+
+        // Try 1: Open from Assets (assets/appfilter.xml, etc.)
+        let mut loaded = false;
+        if let Ok(ctx_val) = env.call_method(&activity, "createPackageContext", "(Ljava/lang/String;I)Landroid/content/Context;", &[(&pack_jstr).into(), 2i32.into()]) {
+            if let Ok(pack_ctx) = ctx_val.l() {
+                if !pack_ctx.as_raw().is_null() {
+                    if let Ok(assets_val) = env.call_method(&pack_ctx, "getAssets", "()Landroid/content/res/AssetManager;", &[]) {
+                        if let Ok(assets) = assets_val.l() {
+                            for fname in ["appfilter.xml", "appfilter_theme.xml", "theme_resources.xml", "appmap.xml"] {
+                                if let Ok(fn_jstr) = env.new_string(fname) {
+                                    if let Ok(is_val) = env.call_method(&assets, "open", "(Ljava/lang/String;)Ljava/io/InputStream;", &[(&fn_jstr).into()]) {
+                                        if let Ok(is) = is_val.l() {
+                                            if !is.as_raw().is_null() {
+                                                let chunk_size = 32768;
+                                                if let Ok(jbyte_arr) = env.new_byte_array(chunk_size) {
+                                                    let mut buf = Vec::new();
+                                                    let mut temp_buf = vec![0i8; chunk_size as usize];
+                                                    loop {
+                                                        if let Ok(n_val) = env.call_method(&is, "read", "([B)I", &[(&jbyte_arr).into()]) {
+                                                            let n = n_val.i().unwrap_or(-1);
+                                                            if n <= 0 { break; }
+                                                            if env.get_byte_array_region(&jbyte_arr, 0, &mut temp_buf[..n as usize]).is_ok() {
+                                                                let u8_slice: &[u8] = std::slice::from_raw_parts(temp_buf.as_ptr() as *const u8, n as usize);
+                                                                buf.extend_from_slice(u8_slice);
+                                                            } else {
+                                                                break;
+                                                            }
+                                                        } else {
+                                                            break;
+                                                        }
+                                                    }
+                                                    let _ = env.call_method(&is, "close", "()V", &[]);
+                                                    if !buf.is_empty() {
+                                                        let text = String::from_utf8_lossy(&buf);
+                                                        parse_appfilter_xml_str(&text, &mut map);
+                                                        if !map.is_empty() {
+                                                            loaded = true;
+                                                            log::info!("Loaded {} appfilter mappings from assets/{} for {}", map.len(), fname, pack_pkg);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            let _ = env.exception_clear();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                let _ = env.exception_clear();
+            }
+        } else {
+            let _ = env.exception_clear();
+        }
+
+        if loaded {
+            return map;
+        }
+
+        // Try 2: res/xml/appfilter (compiled XML in res/xml/)
+        if let Ok(pm_val) = env.call_method(&activity, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]) {
+            if let Ok(pm) = pm_val.l() {
+                if let Ok(res_val) = env.call_method(&pm, "getResourcesForApplication", "(Ljava/lang/String;)Landroid/content/res/Resources;", &[(&pack_jstr).into()]) {
+                    if let Ok(res) = res_val.l() {
+                        if let Ok(xml_type) = env.new_string("xml") {
+                            for xml_name in ["appfilter", "appfilter_theme", "theme_resources", "appmap"] {
+                                if let Ok(name_jstr) = env.new_string(xml_name) {
+                                    if let Ok(id_val) = env.call_method(&res, "getIdentifier", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I", &[(&name_jstr).into(), (&xml_type).into(), (&pack_jstr).into()]) {
+                                        let res_id = id_val.i().unwrap_or(0);
+                                        if res_id != 0 {
+                                            if let Ok(parser_val) = env.call_method(&res, "getXml", "(I)Landroid/content/res/XmlResourceParser;", &[res_id.into()]) {
+                                                if let Ok(parser) = parser_val.l() {
+                                                    if !parser.as_raw().is_null() {
+                                                        parse_xml_resource_parser(&mut env, &parser, &mut map);
+                                                        let _ = env.call_method(&parser, "close", "()V", &[]);
+                                                        if !map.is_empty() {
+                                                            log::info!("Loaded {} appfilter mappings from res/xml/{} for {}", map.len(), xml_name, pack_pkg);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    map
+}
+
+#[cfg(not(target_os = "android"))]
+fn load_icon_pack_appfilter(_app: &slint::android::AndroidApp, _pack_pkg: &str) -> std::collections::HashMap<String, String> {
+    std::collections::HashMap::new()
+}
+
+#[cfg(target_os = "android")]
+fn load_app_icon_image(
+    app: &slint::android::AndroidApp,
+    item_id: &str,
+    pkg: &str,
+    app_name: &str,
+    icon_pack_pkg: Option<&str>,
+    appfilter: Option<&std::collections::HashMap<String, String>>,
+) -> Option<slint::Image> {
     unsafe {
         let vm_ptr = app.vm_as_ptr() as *mut jni::sys::JavaVM;
         if vm_ptr.is_null() { return None; }
@@ -521,11 +778,86 @@ fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pk
             if let Ok(pack_str) = env.new_string(pack_pkg) {
                 if let Ok(res_val) = env.call_method(&pm, "getResourcesForApplication", "(Ljava/lang/String;)Landroid/content/res/Resources;", &[(&pack_str).into()]) {
                     if let Ok(res) = res_val.l() {
+                        let mut candidates: Vec<String> = Vec::new();
+
+                        // A. Check appfilter.xml mappings
+                        if let Some(map) = appfilter {
+                            let pkg_lower = pkg.to_lowercase();
+                            if let Some(target) = map.get(&pkg_lower) {
+                                candidates.push(target.clone());
+                            }
+                            // Canonical TV-to-Mobile aliases
+                            let alias = match pkg {
+                                "org.smarttube.stable" | "com.liskovsoft.smarttubetv.beta" | "com.liskovsoft.videomanager" => Some("com.google.android.youtube"),
+                                "com.spotify.tv.android" => Some("com.spotify.music"),
+                                "com.netflix.ninja" => Some("com.netflix.mediaclient"),
+                                "com.amazon.amazonvideo.livingroom" => Some("com.amazon.avod.thirdpartyclient"),
+                                "com.apple.atve.androidtv.appletv" => Some("com.apple.android.tv"),
+                                "android.settings.SETTINGS" | "settings" => Some("com.android.settings"),
+                                "cm.aptoidetv.pt" => Some("cm.aptoide.pt"),
+                                "org.jellyfin.androidtv" => Some("org.jellyfin.mobile"),
+                                _ => None,
+                            };
+                            if let Some(al) = alias {
+                                if let Some(target) = map.get(al) {
+                                    if !candidates.contains(target) {
+                                        candidates.push(target.clone());
+                                    }
+                                }
+                            }
+                        }
+
+                        // B. Smart known aliases based on item_id
+                        let id_aliases: &[&str] = match item_id {
+                            "youtube" => &["youtube", "youtube_tv", "smarttube", "ic_youtube"],
+                            "spotify" => &["spotify", "spotify_music", "ic_spotify"],
+                            "appletv" => &["apple_tv", "appletv", "apple", "ic_apple_tv"],
+                            "primevideo" => &["amazon_prime_video", "prime_video", "amazon_video", "primevideo", "amazon_prime"],
+                            "netflix" => &["netflix", "ic_netflix"],
+                            "aurora" => &["aurora_store", "aurora", "aurorastore"],
+                            "plex" => &["plex", "plexamp"],
+                            "settings" => &["settings", "generic_settings", "preferences", "tv_settings"],
+                            "jellyfin" => &["jellyfin"],
+                            "tubi" => &["tubi", "tubi_tv"],
+                            "disneyplus" => &["disney_plus", "disneyplus", "disney"],
+                            "stremio" => &["stremio"],
+                            "livetv" => &["live_tv", "livetv"],
+                            "mediaplayer" => &["media_player", "mediaplayer", "gallery"],
+                            "aptoide" => &["aptoide_tv", "aptoide"],
+                            "projectivy" => &["projectivy", "projectivy_launcher", "launcher"],
+                            _ => &[],
+                        };
+                        for a in id_aliases {
+                            if !candidates.contains(&a.to_string()) {
+                                candidates.push(a.to_string());
+                            }
+                        }
+
+                        // C. Item Name variations (e.g. "Prime Video" -> "prime_video")
+                        let clean_name = app_name.to_lowercase().replace(' ', "_").replace('+', "_plus").replace('-', "_");
+                        if !clean_name.is_empty() && !candidates.contains(&clean_name) {
+                            candidates.push(clean_name.clone());
+                            let compact = clean_name.replace('_', "");
+                            if !candidates.contains(&compact) {
+                                candidates.push(compact);
+                            }
+                        }
+
+                        // D. Clean package & short name
                         let clean_pkg = pkg.replace('.', "_").to_lowercase();
+                        if !candidates.contains(&clean_pkg) {
+                            candidates.push(clean_pkg);
+                        }
+
                         let short_name = pkg.split('.').last().unwrap_or(pkg).to_lowercase();
+                        if !candidates.contains(&short_name) {
+                            candidates.push(short_name);
+                        }
+
+                        // Try resolving each candidate
                         if let Ok(def_type) = env.new_string("drawable") {
-                            for candidate in [&clean_pkg, &short_name] {
-                                if let Ok(name_str) = env.new_string(candidate) {
+                            for cand in &candidates {
+                                if let Ok(name_str) = env.new_string(cand) {
                                     if let Ok(id_val) = env.call_method(&res, "getIdentifier", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I", &[(&name_str).into(), (&def_type).into(), (&pack_str).into()]) {
                                         let id = id_val.i().unwrap_or(0);
                                         if id != 0 {
@@ -536,13 +868,19 @@ fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pk
                                                         break;
                                                     }
                                                 }
+                                            } else {
+                                                let _ = env.exception_clear();
                                             }
                                         }
+                                    } else {
+                                        let _ = env.exception_clear();
                                     }
                                 }
                             }
                         }
                     }
+                } else {
+                    let _ = env.exception_clear();
                 }
             }
         }
@@ -556,14 +894,16 @@ fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pk
                             drawable_opt = Some(d);
                         }
                     }
+                } else {
+                    let _ = env.exception_clear();
                 }
             }
         }
 
         let drawable = drawable_opt?;
 
-        // 3. Render Drawable into Bitmap (96x96 ARGB_8888)
-        let size = 96i32;
+        // 3. Render Drawable into Bitmap (128x128 ARGB_8888 for high definition clarity)
+        let size = 128i32;
         let config_class = env.find_class("android/graphics/Bitmap$Config").ok()?;
         let argb_field = env.get_static_field(&config_class, "ARGB_8888", "Landroid/graphics/Bitmap$Config;").ok()?;
         let argb_obj = argb_field.l().ok()?;
@@ -596,7 +936,14 @@ fn load_app_icon_image(app: &slint::android::AndroidApp, pkg: &str, icon_pack_pk
 }
 
 #[cfg(not(target_os = "android"))]
-fn load_app_icon_image(_app: &slint::android::AndroidApp, _pkg: &str, _icon_pack: Option<&str>) -> Option<slint::Image> {
+fn load_app_icon_image(
+    _app: &slint::android::AndroidApp,
+    _item_id: &str,
+    _pkg: &str,
+    _app_name: &str,
+    _icon_pack_pkg: Option<&str>,
+    _appfilter: Option<&std::collections::HashMap<String, String>>,
+) -> Option<slint::Image> {
     None
 }
 
@@ -793,11 +1140,14 @@ fn populate_installed_apps_into_ui(win: &MainWindow, app: &slint::android::Andro
             let b = (((h >> 16) & 0xFF) % 180 + 75) as u8;
             let brand_color = slint::Color::from_rgb_u8(r, g, b);
 
+            let app_icon = load_app_icon_image(app, &pkg, &pkg, &label, None, None)
+                .unwrap_or_else(|| fallback_icon.clone());
+
             full_model.push(AppItem {
                 id: pkg.clone().into(),
                 name: label.into(),
                 pkg: pkg.into(),
-                icon: fallback_icon.clone(),
+                icon: app_icon,
                 brand_color,
                 in_dock: false,
             });
@@ -813,10 +1163,27 @@ fn apply_icon_pack_to_models(win: &MainWindow, s: &mut AppState, app: &slint::an
     let total = all_model.row_count();
     let updated_all = Rc::new(slint::VecModel::default());
 
+    let is_custom = s.icon_pack != "CleanFrame default" && s.icon_pack != "Full Color";
+    win.set_current_icon_pack(s.icon_pack.clone().into());
+    win.set_is_custom_icon_pack(is_custom);
+
     let icon_pack_pkg: Option<String> = if s.icon_pack == "CleanFrame default" || s.icon_pack == "Full Color" || s.icon_pack == "System Default" {
         None
     } else {
         s.installed_icon_packs.iter().find(|(p, name)| *name == s.icon_pack || *p == s.icon_pack).map(|(p, _)| p.clone())
+    };
+
+    if let Some(ref pack_pkg) = icon_pack_pkg {
+        if !s.icon_pack_mappings.borrow().contains_key(pack_pkg) {
+            let mappings = load_icon_pack_appfilter(app, pack_pkg);
+            s.icon_pack_mappings.borrow_mut().insert(pack_pkg.clone(), mappings);
+        }
+    }
+
+    let appfilter_opt = if let Some(ref pack_pkg) = icon_pack_pkg {
+        s.icon_pack_mappings.borrow().get(pack_pkg).cloned()
+    } else {
+        None
     };
 
     for i in 0..total {
@@ -827,12 +1194,19 @@ fn apply_icon_pack_to_models(win: &MainWindow, s: &mut AppState, app: &slint::an
                 }
             } else {
                 // System Default or External Icon Pack
-                let cache_key = format!("{}:{}", s.icon_pack, item.pkg);
+                let cache_key = format!("{}:{}:{}", s.icon_pack, item.id, item.pkg);
                 let mut cache = s.app_icon_cache.borrow_mut();
                 let img = if let Some(cached) = cache.get(&cache_key) {
                     cached.clone()
                 } else {
-                    let loaded = load_app_icon_image(app, item.pkg.as_str(), icon_pack_pkg.as_deref());
+                    let loaded = load_app_icon_image(
+                        app,
+                        item.id.as_str(),
+                        item.pkg.as_str(),
+                        item.name.as_str(),
+                        icon_pack_pkg.as_deref(),
+                        appfilter_opt.as_ref(),
+                    );
                     let chosen = loaded.unwrap_or_else(|| {
                         s.stock_vector_icons.get(&item.pkg.to_string()).cloned().unwrap_or(item.icon.clone())
                     });
@@ -1266,6 +1640,7 @@ fn android_main(app: slint::android::AndroidApp) {
         icon_pack: "CleanFrame default".to_string(),
         installed_icon_packs,
         stock_vector_icons,
+        icon_pack_mappings: std::cell::RefCell::new(std::collections::HashMap::new()),
         app_icon_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
         art_mode: false,
         art_saved_notice: false,
